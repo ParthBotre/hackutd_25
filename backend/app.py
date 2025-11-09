@@ -729,6 +729,96 @@ def update_mockup_html(mockup_id):
         'message': 'Mockup updated successfully'
     })
 
+@app.route('/api/mockups/<mockup_id>/submit', methods=['POST'])
+def submit_mockup_to_jira(mockup_id):
+    """Submit mockup to Jira - analyzes mockup vs repo and creates multiple tickets"""
+
+    try:
+        # Get mockup data from database
+        mockup = get_mockup_from_db(mockup_id)
+        if not mockup:
+            return jsonify({'error': 'Mockup not found'}), 404
+        
+        # Get HTML content
+        html_path = MOCKUPS_DIR / mockup['html_filename']
+        if not html_path.exists():
+            return jsonify({'error': 'Mockup HTML file not found'}), 404
+        
+        with open(html_path, 'r', encoding='utf-8') as f:
+            mockup_html = f.read()
+        
+        # Get GitHub repo URL from mockup data or request
+        # Handle case where request might not have JSON body
+        try:
+            request_data = request.get_json(silent=True) or {}
+        except Exception:
+            request_data = {}
+        
+        github_repo_url = request_data.get('github_repo_url') or "https://github.com/GraysenGould/TestBanking.git"
+        
+        # Re-analyze repository to get current state
+        from repo_mockup_generator import parse_github_url
+        from github_integration import analyze_repo_for_mockup
+        from mockup_analyzer import analyze_mockup_vs_repo, create_tickets_from_analysis
+        
+        owner, repo_name = parse_github_url(github_repo_url)
+        if not owner or not repo_name:
+            return jsonify({'error': 'Invalid GitHub repository URL'}), 400
+        
+        print(f"Analyzing repository {owner}/{repo_name} for comparison with mockup")
+        
+        # Get repository data
+        repo_data = analyze_repo_for_mockup(owner, repo_name, mockup['prompt'], None)
+        
+        # Analyze differences and create tickets
+        print("Analyzing mockup vs repository to create tickets...")
+        tickets = analyze_mockup_vs_repo(mockup_html, repo_data, github_repo_url)
+        
+        print(f"Generated {len(tickets)} tickets from analysis")
+        
+        # Create tickets in Jira
+        results = create_tickets_from_analysis(tickets, github_repo_url, mockup_id)
+        
+        # Count successes and failures
+        successful = [r for r in results if r.get('success')]
+        failed = [r for r in results if not r.get('success')]
+        
+        return jsonify({
+            'success': True,
+            'message': f'Created {len(successful)} ticket(s) in Jira',
+            'tickets_created': len(successful),
+            'tickets_failed': len(failed),
+            'tickets': [
+                {
+                    'title': r.get('title', 'Unknown'),
+                    'issue_key': r.get('issue_key'),
+                    'issue_url': r.get('issue_url'),
+                    'difficulty': r.get('difficulty'),
+                    'priority': r.get('priority'),
+                    'success': r.get('success', False),
+                    'error': r.get('error') if not r.get('success') else None
+                }
+                for r in results
+            ]
+        })
+            
+    except ValueError as e:
+        error_msg = f'Configuration error: {str(e)}'
+        print(f"Jira Configuration Error: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+    except Exception as e:
+        import traceback
+        error_msg = f'Failed to submit mockup to Jira: {str(e)}'
+        print(f"Error submitting mockup to Jira: {error_msg}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+
 def call_nvidia_nemotron_chat(messages, system_message=None):
     """Call NVIDIA Nemotron API with conversation history"""
     if not NVIDIA_API_KEY or NVIDIA_API_KEY == '':
