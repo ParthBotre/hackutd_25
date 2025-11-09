@@ -9,14 +9,24 @@ from dotenv import load_dotenv
 import sqlite3
 
 # Load environment variables from .env file
+# Try to load from backend directory explicitly
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+# Also try default location
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 # Configuration for NVIDIA Nemotron API
-NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY', '')
-NVIDIA_API_URL = os.environ.get('NVIDIA_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions')
+NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY', '').strip()
+NVIDIA_API_URL = os.environ.get('NVIDIA_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions').strip()
+
+# Debug: Check if API key is loaded (don't print the actual key)
+if NVIDIA_API_KEY:
+    print(f"✅ NVIDIA_API_KEY loaded (length: {len(NVIDIA_API_KEY)} characters)")
+else:
+    print("⚠️  NVIDIA_API_KEY is empty or not set")
 
 # Storage directories and database
 MOCKUPS_DIR = Path('mockups')
@@ -192,8 +202,14 @@ def serialize_mockup_row(row, include_html=False):
 
 def call_nvidia_nemotron(prompt, system_message):
     """Call NVIDIA Nemotron API"""
+    if not NVIDIA_API_KEY or NVIDIA_API_KEY == '':
+        raise Exception("NVIDIA_API_KEY is not set. Please create a .env file in the backend directory with your API key.")
+    
+    # Clean the API key (remove any quotes or whitespace)
+    api_key = NVIDIA_API_KEY.strip().strip('"').strip("'")
+    
     headers = {
-        'Authorization': f'Bearer {NVIDIA_API_KEY}',
+        'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
     
@@ -212,14 +228,36 @@ def call_nvidia_nemotron(prompt, system_message):
     }
     
     try:
-        response = requests.post(NVIDIA_API_URL, headers=headers, json=payload, timeout=60)
+        # Debug logging (don't log the full API key)
+        print(f"Making API request to: {NVIDIA_API_URL}")
+        print(f"API Key present: {bool(api_key)}, length: {len(api_key)}")
+        print(f"Model: {payload['model']}")
+        
+        response = requests.post(NVIDIA_API_URL, headers=headers, json=payload, timeout=120)
         response.raise_for_status()
         result = response.json()
+        if 'choices' not in result or len(result['choices']) == 0:
+            raise Exception("No choices in API response")
         return result['choices'][0]['message']['content']
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling NVIDIA API (RequestException): {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            status_code = e.response.status_code
+            print(f"Response status: {status_code}")
+            print(f"Response body: {e.response.text}")
+            
+            if status_code == 401:
+                raise Exception("Invalid API key. Please check your NVIDIA_API_KEY in the .env file. Get your API key from https://build.nvidia.com/")
+            elif status_code == 429:
+                raise Exception("Rate limit exceeded. Please wait a moment and try again.")
+            elif status_code == 400:
+                raise Exception(f"Invalid request: {e.response.text}")
+            else:
+                raise Exception(f"API request failed with status {status_code}: {e.response.text}")
+        raise Exception(f"Failed to call NVIDIA API: {str(e)}")
     except Exception as e:
         print(f"Error calling NVIDIA API: {str(e)}")
-        # Fallback to mock response for development
-        return generate_mock_html(prompt)
+        raise Exception(f"Failed to process AI request: {str(e)}")
 
 def generate_mock_html(prompt):
     """Generate a simple HTML mockup (fallback for development)"""
@@ -340,6 +378,20 @@ def generate_mock_html(prompt):
 def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'PM Mockup Generator API is running'})
+
+@app.route('/api/debug/api-key', methods=['GET'])
+def debug_api_key():
+    """Debug endpoint to check API key status (without exposing the key)"""
+    api_key_set = bool(NVIDIA_API_KEY and NVIDIA_API_KEY.strip())
+    api_key_length = len(NVIDIA_API_KEY.strip()) if NVIDIA_API_KEY else 0
+    api_key_preview = f"{NVIDIA_API_KEY[:8]}..." if api_key_set and len(NVIDIA_API_KEY) > 8 else "Not set"
+    
+    return jsonify({
+        'api_key_set': api_key_set,
+        'api_key_length': api_key_length,
+        'api_key_preview': api_key_preview,
+        'api_url': NVIDIA_API_URL
+    })
 
 @app.route('/api/mockups', methods=['GET'])
 def list_mockups():
@@ -574,6 +626,101 @@ Return ONLY the complete HTML code, no explanations."""
         'success': True,
         'mockup_id': mockup_id,
         'html_content': refined_html
+    })
+
+@app.route('/api/edit-html', methods=['POST'])
+def edit_html():
+    """Edit HTML using natural language instructions"""
+    data = request.json
+    original_html = data.get('html_content', '')
+    edit_instruction = data.get('instruction', '')
+    
+    if not original_html or not edit_instruction:
+        return jsonify({'error': 'HTML content and edit instruction are required'}), 400
+    
+    # Create edit prompt
+    edit_prompt = f"""Edit the following HTML according to this instruction: {edit_instruction}
+
+Original HTML:
+{original_html}
+
+Please provide the complete modified HTML code that implements the requested changes. Return ONLY the complete HTML code, no explanations or markdown formatting."""
+    
+    system_message = """You are an expert frontend developer and HTML editor. 
+When given HTML code and an edit instruction, modify the HTML to implement the requested changes.
+Maintain the overall structure and styling while making the specific requested modifications.
+Return ONLY the complete HTML code, no explanations."""
+    
+    try:
+        # Call NVIDIA Nemotron to edit
+        edited_html = call_nvidia_nemotron(edit_prompt, system_message)
+        
+        # Clean up the response (remove thinking tags and markdown code blocks)
+        if '<think>' in edited_html and '</think>' in edited_html:
+            start_idx = edited_html.find('<think>')
+            end_idx = edited_html.find('</think>') + len('</think>')
+            edited_html = edited_html[:start_idx] + edited_html[end_idx:]
+            edited_html = edited_html.strip()
+        
+        if '```html' in edited_html:
+            edited_html = edited_html.split('```html')[1].split('```')[0].strip()
+        elif '```' in edited_html:
+            edited_html = edited_html.split('```')[1].split('```')[0].strip()
+        
+        return jsonify({
+            'success': True,
+            'html_content': edited_html
+        })
+    except Exception as e:
+        print(f"Error in edit_html endpoint: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/mockups/<mockup_id>/update', methods=['PUT'])
+def update_mockup_html(mockup_id):
+    """Update the HTML content of an existing mockup"""
+    data = request.json
+    new_html = data.get('html_content', '')
+    
+    if not new_html:
+        return jsonify({'error': 'HTML content is required'}), 400
+    
+    mockup = get_mockup_from_db(mockup_id)
+    if not mockup:
+        return jsonify({'error': 'Mockup not found'}), 404
+    
+    # Update HTML in database
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE mockups SET html_content = ? WHERE id = ?",
+                (new_html, mockup_id)
+            )
+    finally:
+        conn.close()
+    
+    # Update HTML file
+    html_path = MOCKUPS_DIR / f'mockup_{mockup_id}.html'
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(new_html)
+    
+    # Regenerate screenshot
+    screenshot_filename = f'mockup_{mockup_id}.png'
+    try:
+        hti.screenshot(
+            html_str=new_html,
+            save_as=screenshot_filename,
+            size=(1400, 900)
+        )
+    except Exception as e:
+        print(f"Error generating screenshot: {str(e)}")
+    
+    return jsonify({
+        'success': True,
+        'message': 'Mockup updated successfully'
     })
 
 if __name__ == '__main__':

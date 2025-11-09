@@ -4,77 +4,41 @@ import {
   ArrowLeft, 
   Code, 
   Eye, 
-  MessageSquare, 
   Send, 
   RefreshCw,
   Download,
-  User
+  User,
+  Edit,
+  Save,
+  Bot
 } from 'lucide-react';
 import './MockupViewer.css';
 
 function MockupViewer({ mockup, onBack }) {
   const [activeTab, setActiveTab] = useState('preview');
-  const [feedback, setFeedback] = useState([]);
-  const [newFeedback, setNewFeedback] = useState('');
-  const [author, setAuthor] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [htmlContent, setHtmlContent] = useState(mockup.html_content);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
 
   useEffect(() => {
-    loadFeedback();
-  }, [mockup.id]);
-
-  const loadFeedback = async () => {
-    try {
-      const response = await axios.get(`/api/mockups/${mockup.id}/feedback`);
-      setFeedback(response.data.feedback);
-    } catch (err) {
-      console.error('Error loading feedback:', err);
-    }
-  };
-
-  const handleSubmitFeedback = async (e) => {
-    e.preventDefault();
-    
-    if (!newFeedback.trim()) return;
-
-    setSubmitting(true);
-
-    try {
-      await axios.post(`/api/mockups/${mockup.id}/feedback`, {
-        feedback: newFeedback.trim(),
-        author: author.trim() || 'Anonymous'
-      });
-
-      setNewFeedback('');
-      await loadFeedback();
-    } catch (err) {
-      console.error('Error submitting feedback:', err);
-      alert('Failed to submit feedback. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    setHtmlContent(mockup.html_content);
+  }, [mockup.id, mockup.html_content]);
 
   const handleRefine = async () => {
-    if (feedback.length === 0) {
-      alert('Please add some feedback before refining the mockup.');
-      return;
-    }
-
     setRefining(true);
 
     try {
-      const feedbackTexts = feedback.map(f => f.text);
       const response = await axios.post('/api/refine-mockup', {
-        original_html: mockup.html_content,
-        feedback: feedbackTexts
+        original_html: htmlContent,
+        feedback: ['Refine and improve the design']
       });
 
       if (response.data.success) {
-        alert('Mockup refined successfully! The page will reload to show the new version.');
-        // In a full implementation, you'd update the mockup and reload the viewer
-        window.location.reload();
+        setHtmlContent(response.data.html_content);
+        alert('Mockup refined successfully!');
       }
     } catch (err) {
       console.error('Error refining mockup:', err);
@@ -85,7 +49,7 @@ function MockupViewer({ mockup, onBack }) {
   };
 
   const handleDownloadHTML = () => {
-    const blob = new Blob([mockup.html_content], { type: 'text/html' });
+    const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -94,6 +58,85 @@ function MockupViewer({ mockup, onBack }) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleEditWithAI = async (e) => {
+    e.preventDefault();
+    
+    if (!editInstruction.trim()) {
+      alert('Please enter an edit instruction');
+      return;
+    }
+
+    setEditing(true);
+    const userMessage = editInstruction.trim();
+    setChatHistory(prev => [...prev, { role: 'user', content: userMessage }]);
+    setEditInstruction('');
+
+    try {
+      const response = await axios.post('/api/edit-html', {
+        html_content: htmlContent,
+        instruction: userMessage
+      });
+
+      if (response.data.success && response.data.html_content) {
+        const newHtml = response.data.html_content;
+        setHtmlContent(newHtml);
+        
+        // Automatically save the edited HTML to the database
+        try {
+          await axios.put(`/api/mockups/${mockup.id}/update`, {
+            html_content: newHtml
+          });
+          // Update mockup object to reflect saved changes
+          mockup.html_content = newHtml;
+          setChatHistory(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'HTML has been updated and saved successfully! Check the preview to see the changes.' 
+          }]);
+        } catch (saveErr) {
+          console.error('Error auto-saving changes:', saveErr);
+          setChatHistory(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'HTML has been updated, but failed to save. Please click "Save Changes" manually.' 
+          }]);
+        }
+      } else {
+        throw new Error(response.data.error || 'Unknown error occurred');
+      }
+    } catch (err) {
+      console.error('Error editing HTML:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to connect to AI service';
+      setChatHistory(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Error: ${errorMessage}. Please check your API key and try again.` 
+      }]);
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    setSaving(true);
+    try {
+      const response = await axios.put(`/api/mockups/${mockup.id}/update`, {
+        html_content: htmlContent
+      });
+      
+      if (response.data.success) {
+        // Update mockup object to reflect saved changes
+        mockup.html_content = htmlContent;
+        alert('Changes saved successfully!');
+      } else {
+        throw new Error(response.data.error || 'Save failed');
+      }
+    } catch (err) {
+      console.error('Error saving changes:', err);
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to save changes';
+      alert(`Failed to save changes: ${errorMsg}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -115,7 +158,7 @@ function MockupViewer({ mockup, onBack }) {
           <button 
             className="action-button refine-button" 
             onClick={handleRefine}
-            disabled={refining || feedback.length === 0}
+            disabled={refining}
           >
             <RefreshCw className={refining ? 'spinning' : ''} />
             {refining ? 'Refining...' : 'Refine with AI'}
@@ -144,78 +187,117 @@ function MockupViewer({ mockup, onBack }) {
               <Code />
               HTML Code
             </button>
+            <button
+              className={`tab ${activeTab === 'edit' ? 'active' : ''}`}
+              onClick={() => setActiveTab('edit')}
+            >
+              <Edit />
+              Edit with AI
+            </button>
           </div>
 
           <div className="tab-content">
             {activeTab === 'preview' ? (
               <div className="preview-container">
                 <iframe
-                  srcDoc={mockup.html_content}
+                  srcDoc={htmlContent}
                   title="Mockup Preview"
                   className="mockup-iframe"
                   sandbox="allow-same-origin"
                 />
               </div>
-            ) : (
+            ) : activeTab === 'code' ? (
               <div className="code-container">
                 <pre>
-                  <code>{mockup.html_content}</code>
+                  <code>{htmlContent}</code>
                 </pre>
+              </div>
+            ) : (
+              <div className="edit-container">
+                <div className="edit-panel">
+                  <div className="edit-header">
+                    <h3>HTML Editor</h3>
+                    <button 
+                      className="save-button"
+                      onClick={handleSaveChanges}
+                      disabled={saving}
+                    >
+                      <Save size={16} />
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                  <textarea
+                    className="html-editor"
+                    value={htmlContent}
+                    onChange={(e) => setHtmlContent(e.target.value)}
+                    placeholder="HTML content..."
+                  />
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="feedback-panel">
-          <div className="feedback-header">
-            <MessageSquare className="panel-icon" />
-            <h2>Feedback & Comments</h2>
+        <div className="chatbot-panel">
+          <div className="chatbot-header">
+            <Bot className="bot-icon" />
+            <h3>AI Editor Assistant</h3>
           </div>
-
-          <div className="feedback-list">
-            {feedback.length === 0 ? (
-              <div className="empty-feedback">
-                <p>No feedback yet. Be the first to comment!</p>
+          <div className="chat-messages">
+            {chatHistory.length === 0 ? (
+              <div className="chat-empty">
+                <p>Describe the changes you want to make to the HTML.</p>
+                <p className="chat-examples">Examples:</p>
+                <ul>
+                  <li>"Change the background color to blue"</li>
+                  <li>"Make the heading text larger"</li>
+                  <li>"Add a button with rounded corners"</li>
+                  <li>"Change the font to Arial"</li>
+                </ul>
               </div>
             ) : (
-              feedback.map((fb) => (
-                <div key={fb.id} className="feedback-item">
-                  <div className="feedback-author">
-                    <User className="author-icon" />
-                    <span className="author-name">{fb.author}</span>
-                    <span className="feedback-time">{formatDate(fb.timestamp)}</span>
+              chatHistory.map((msg, idx) => (
+                <div key={idx} className={`chat-message ${msg.role}`}>
+                  <div className="message-content">
+                    {msg.role === 'user' ? (
+                      <>
+                        <User size={16} className="message-icon" />
+                        <div className="message-text">{msg.content}</div>
+                      </>
+                    ) : (
+                      <>
+                        <Bot size={16} className="message-icon" />
+                        <div className="message-text">{msg.content}</div>
+                      </>
+                    )}
                   </div>
-                  <p className="feedback-text">{fb.text}</p>
                 </div>
               ))
             )}
+            {editing && (
+              <div className="chat-message assistant">
+                <div className="message-content">
+                  <Bot size={16} className="message-icon spinning" />
+                  <div className="message-text">Editing HTML...</div>
+                </div>
+              </div>
+            )}
           </div>
-
-          <form className="feedback-form" onSubmit={handleSubmitFeedback}>
-            <input
-              type="text"
-              placeholder="Your name (optional)"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className="author-input"
-              disabled={submitting}
-            />
+          <form className="chat-input-form" onSubmit={handleEditWithAI}>
             <textarea
-              placeholder="Add your feedback or suggestions..."
-              value={newFeedback}
-              onChange={(e) => setNewFeedback(e.target.value)}
-              className="feedback-textarea"
-              rows="3"
-              disabled={submitting}
-              required
+              className="chat-input"
+              value={editInstruction}
+              onChange={(e) => setEditInstruction(e.target.value)}
+              placeholder="Describe the changes you want to make..."
+              rows="2"
+              disabled={editing}
             />
             <button 
               type="submit" 
-              className="submit-feedback-button"
-              disabled={submitting}
+              className="chat-send-button"
+              disabled={editing || !editInstruction.trim()}
             >
-              <Send />
-              {submitting ? 'Sending...' : 'Send Feedback'}
+              <Send size={18} />
             </button>
           </form>
         </div>
