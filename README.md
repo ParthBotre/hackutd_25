@@ -21,6 +21,8 @@ This project demonstrates:
 ## ✨ Features
 
 - 🤖 **AI-Powered Generation**: Leverages NVIDIA Nemotron for intelligent mockup creation
+- 🔗 **GitHub Integration**: Analyze repositories and generate context-aware mockups
+- 📋 **Jira Integration**: Automatically create development tickets from mockups
 - ⚡ **Instant Preview**: Real-time HTML rendering with iframe preview
 - ✏️ **AI-Powered HTML Editor**: Edit HTML with natural language instructions using AI Assistant
 - 💾 **SQLite Database**: Persistent storage for all mockups and edits
@@ -30,6 +32,8 @@ This project demonstrates:
 - 📥 **Export Ready**: Download HTML files to share with development teams
 - 🎨 **Modern UI**: Beautiful, responsive dashboard built with React
 - 🔍 **Code Editor**: Direct HTML editing with syntax highlighting
+- 🎯 **Smart Ticket Generation**: Compare mockups with repos and create prioritized Jira tickets
+- 🔧 **MCP Server**: Model Context Protocol server for GitHub-aware mockup generation
 
 ## 🏗️ Architecture
 
@@ -66,8 +70,24 @@ This project demonstrates:
 - Python 3.8+ 
 - Node.js 16+
 - npm or yarn
+- Git (for cloning the repository)
 - NVIDIA API Key (get from [NVIDIA API Catalog](https://build.nvidia.com/))
-- Brev account (optional, for enhanced rate limit management)
+- GitHub Personal Access Token (optional, for private repos or higher rate limits)
+- Jira credentials (optional, for Jira integration)
+
+### Clone the Repository
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd hackutd_25
+
+# Or if you have the repository URL:
+git clone https://github.com/your-username/hackutd_25.git
+cd hackutd_25
+```
+
+**Note**: Replace `<repository-url>` with the actual repository URL.
 
 ### Backend Setup
 
@@ -137,32 +157,53 @@ pip install -r requirements.txt
 **Option A: Manual Creation (Recommended)**
 
 1. Create a file named `.env` in the `backend` directory
-2. Add the following content (replace `your_nvidia_api_key_here` with your actual API key):
+2. Add the following content (replace placeholders with your actual values):
 
 ```env
+# Required: NVIDIA API Key for mockup generation
 NVIDIA_API_KEY=your_nvidia_api_key_here
 NVIDIA_API_URL=https://integrate.api.nvidia.com/v1/chat/completions
+
+# Optional: GitHub Token (for private repos or higher rate limits)
+# Get from: https://github.com/settings/tokens
+GITHUB_TOKEN=your_github_token_here
+
+# Optional: Jira Integration (for submitting mockups to Jira)
+# Get from: https://id.atlassian.com/manage-profile/security/api-tokens
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your_jira_api_token_here
+
+# Flask Configuration
 FLASK_ENV=development
 FLASK_DEBUG=True
 ```
 
 **⚠️ CRITICAL**: 
-- Do NOT put quotes around the API key value
+- Do NOT put quotes around the API key values
 - Do NOT add spaces around the `=` sign
 - The file must be named exactly `.env` (not `.env.txt` or `env`)
+- Never commit the `.env` file to Git (it should be in `.gitignore`)
 
 **Option B: Use PowerShell Script (Windows Only)**
 
 ```powershell
+.\create_env.ps1
+```
+
+Or use the setup script:
+```powershell
 .\setup_env.ps1
 ```
 
-Then edit the `.env` file it creates and add your actual API key.
+Then edit the `.env` file it creates and add your actual API keys.
 
 **✅ Verification**: 
 - Check that `.env` file exists in `backend` directory
-- Verify the API key is set (without quotes)
-- Get your API key from: https://build.nvidia.com/
+- Verify the NVIDIA_API_KEY is set (without quotes)
+- Get your NVIDIA API key from: https://build.nvidia.com/
+- GitHub token is optional (see `backend/GITHUB_TOKEN_SETUP.md` for details)
+- Jira credentials are optional (only needed if using Jira integration)
 
 #### Step 6: Run the Backend Server
 
@@ -426,6 +467,29 @@ Before starting, verify you have everything:
 2. Share the HTML file with your development team
 3. Developers can use it as a reference for implementation
 
+### 6. GitHub Repository Integration
+
+1. When generating a mockup, optionally provide a GitHub repository URL
+2. The system will analyze the repository to understand:
+   - Technology stack (from package.json, requirements.txt, etc.)
+   - Existing design patterns and components
+   - Code structure and conventions
+3. The mockup will be enhanced to align with your repository's context
+4. This creates more relevant mockups that match your existing codebase
+
+### 7. Submit to Jira
+
+1. After generating a mockup, click the "Submit" button
+2. The system will:
+   - Compare the mockup with your GitHub repository
+   - Identify required changes and implementation tasks
+   - Create multiple Jira tickets with:
+     - Difficulty scores (1-10)
+     - Priority levels (High, Medium, Low)
+     - Detailed descriptions
+     - Acceptance criteria
+3. View all created tickets with their details and links
+
 ## 🛠️ API Endpoints
 
 ### Health Check
@@ -447,9 +511,12 @@ Content-Type: application/json
 
 {
   "prompt": "Description of the mockup",
-  "project_name": "Optional project name"
+  "project_name": "Optional project name",
+  "github_repo_url": "https://github.com/owner/repo"  // Optional: for context-aware generation
 }
 ```
+
+**Note**: If `github_repo_url` is provided, the system will analyze the repository and enhance the mockup to align with the repository's technology stack and patterns.
 
 ### List All Mockups
 ```
@@ -510,6 +577,37 @@ Content-Type: application/json
 ```
 Refines mockup based on feedback.
 
+### Submit Mockup to Jira
+```
+POST /api/mockups/{mockup_id}/submit
+```
+
+Analyzes the mockup against the GitHub repository and creates multiple Jira tickets with:
+- Difficulty scores (1-10)
+- Priority levels (High, Medium, Low)
+- Detailed descriptions
+- Acceptance criteria
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Created 3 ticket(s) in Jira",
+  "tickets_created": 3,
+  "tickets_failed": 0,
+  "tickets": [
+    {
+      "title": "Implement user dashboard component",
+      "issue_key": "KAN-10",
+      "issue_url": "https://...",
+      "difficulty": 5,
+      "priority": 1,
+      "success": true
+    }
+  ]
+}
+```
+
 ## 🔧 Configuration
 
 ### NVIDIA Nemotron Configuration
@@ -518,25 +616,43 @@ The application uses NVIDIA's `nvidia/llama-3.3-nemotron-super-49b-v1.5` model. 
 
 1. Sign up at [NVIDIA API Catalog](https://build.nvidia.com/)
 2. Generate an API key
-3. Create a `.env` file in the `backend` directory:
+3. Add to `backend/.env`:
    ```env
    NVIDIA_API_KEY=your_actual_api_key_here
    NVIDIA_API_URL=https://integrate.api.nvidia.com/v1/chat/completions
-   FLASK_ENV=development
-   FLASK_DEBUG=True
    ```
 4. **Important**: Remove any quotes around the API key value
 5. Restart the Flask server after creating/updating the `.env` file
 
-**Windows Users**: You can use `setup_env.ps1` script to create the `.env` file template.
+### GitHub Integration (Optional)
 
-### Brev Integration (Optional)
+For GitHub repository analysis and context-aware mockups:
 
-For enhanced rate limit management through Brev:
+1. Go to [GitHub Settings > Tokens](https://github.com/settings/tokens)
+2. Generate a new token with `repo` scope (for private repos) or `public_repo` scope (for public repos)
+3. Add to `backend/.env`:
+   ```env
+   GITHUB_TOKEN=ghp_your_token_here
+   ```
+4. **Note**: Without a token, you can still use public repositories (with 60 requests/hour limit)
+5. See `backend/GITHUB_TOKEN_SETUP.md` for detailed instructions
 
-1. Sign up at [Brev](https://brev.dev/)
-2. Deploy the backend on Brev
-3. Update `NVIDIA_API_URL` to use Brev's proxy endpoint
+### Jira Integration (Optional)
+
+For submitting mockups to Jira and creating development tickets:
+
+1. Go to [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
+2. Create an API token
+3. Add to `backend/.env`:
+   ```env
+   JIRA_BASE_URL=https://your-domain.atlassian.net
+   JIRA_EMAIL=your-email@example.com
+   JIRA_API_TOKEN=your_jira_api_token_here
+   ```
+4. The system will create tickets in the "KAN" project by default (configurable in code)
+5. See `backend/test_jira.py` to test your Jira connection
+
+**Windows Users**: You can use `create_env.ps1` or `setup_env.ps1` script to create the `.env` file template.
 
 ### Customization
 
@@ -549,28 +665,41 @@ For enhanced rate limit management through Brev:
 ```
 hackutd_25/
 ├── backend/
-│   ├── app.py                 # Flask backend with API endpoints
-│   ├── requirements.txt       # Python dependencies
-│   ├── setup_env.ps1          # Windows PowerShell script to create .env
-│   ├── .env                   # Environment variables (create this)
+│   ├── app.py                      # Flask backend with API endpoints
+│   ├── requirements.txt             # Python dependencies
+│   ├── setup_env.ps1               # Windows PowerShell script to create .env
+│   ├── create_env.ps1              # Alternative env creation script
+│   ├── .env                        # Environment variables (create this, not in repo)
+│   ├── nemotron_client.py          # NVIDIA Nemotron API client
+│   ├── github_integration.py       # GitHub API integration
+│   ├── jira_integration.py         # Jira API integration
+│   ├── repo_mockup_generator.py    # Repository-aware mockup generator
+│   ├── mockup_analyzer.py          # Mockup vs repo comparison and ticket generation
+│   ├── mcp_server.py               # MCP server for GitHub-aware generation
+│   ├── test_jira.py                # Jira connection test script
+│   ├── GITHUB_TOKEN_SETUP.md       # GitHub token setup guide
+│   ├── MCP_SERVER_README.md        # MCP server documentation
 │   ├── data/
-│   │   └── mockups.db         # SQLite database (auto-created)
-│   └── mockups/               # Generated HTML files storage
+│   │   └── mockups.db              # SQLite database (auto-created)
+│   └── mockups/                    # Generated HTML files storage
 ├── frontend/
 │   ├── public/
-│   │   └── index.html         # HTML template
+│   │   └── index.html              # HTML template
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Dashboard.js        # Main dashboard with past projects
 │   │   │   ├── Dashboard.css
 │   │   │   ├── MockupViewer.js     # Mockup viewer with AI editor
 │   │   │   └── MockupViewer.css
-│   │   ├── App.js             # Root component
+│   │   ├── config/
+│   │   │   └── api.js              # API endpoint configuration
+│   │   ├── App.js                  # Root component
 │   │   ├── App.css
-│   │   ├── index.js           # React entry point
+│   │   ├── index.js                # React entry point
 │   │   └── index.css
-│   └── package.json           # Node dependencies
-└── README.md                  # This file
+│   └── package.json                # Node dependencies
+├── README.md                       # This file
+└── SETUP.md                        # Quick setup guide
 ```
 
 ## 🎯 Use Cases
@@ -607,17 +736,36 @@ hackutd_25/
 
 ## 🔐 Security Notes
 
-- Never commit your `.env` file to version control
-- Keep your NVIDIA API key confidential
+- **Never commit your `.env` file to version control** - it contains sensitive API keys
+- Keep your API keys confidential:
+  - NVIDIA API key
+  - GitHub token (if using)
+  - Jira credentials (if using)
 - The HTML preview uses iframe sandboxing for security
 - All data is stored locally in SQLite database (`backend/data/mockups.db`)
-- For production deployment, migrate to a cloud database (PostgreSQL, MySQL, etc.)
+- For production deployment:
+  - Migrate to a cloud database (PostgreSQL, MySQL, etc.)
+  - Use environment variables or secret management services
+  - Enable HTTPS for all API communications
+  - Implement proper authentication and authorization
 
-## 🌟 Future Enhancements
+## 🌟 Features & Enhancements
+
+### ✅ Implemented Features
 
 - [x] Database integration for persistent storage (SQLite)
 - [x] Past projects viewing
 - [x] AI-powered HTML editing
+- [x] GitHub repository integration
+- [x] Context-aware mockup generation
+- [x] Jira integration for ticket creation
+- [x] Smart ticket generation with difficulty and priority
+- [x] MCP server for GitHub-aware mockup generation
+- [x] Mockup vs repository comparison
+- [x] Automated acceptance criteria generation
+
+### 🚧 Future Enhancements
+
 - [ ] User authentication and project management
 - [ ] Version control for mockup iterations
 - [ ] Collaborative editing features
@@ -627,6 +775,9 @@ hackutd_25/
 - [ ] Template library
 - [ ] AI-powered A/B test suggestions
 - [ ] Cloud database migration for production
+- [ ] Custom Jira project selection
+- [ ] GitHub webhook integration
+- [ ] Automated PR creation from mockups
 
 ## 📄 License
 
@@ -646,6 +797,32 @@ For questions or issues:
 2. Review the API documentation
 3. Check Flask and React console logs
 4. Refer to NVIDIA API documentation
+5. Check `backend/GITHUB_TOKEN_SETUP.md` for GitHub integration help
+6. Check `backend/MCP_SERVER_README.md` for MCP server documentation
+7. Run `python backend/test_jira.py` to test Jira connection
+
+## 🔗 Additional Resources
+
+- **GitHub Integration**: See `backend/GITHUB_TOKEN_SETUP.md`
+- **MCP Server**: See `backend/MCP_SERVER_README.md`
+- **Quick Setup**: See `SETUP.md` for a condensed setup guide
+- **Jira Testing**: Run `python backend/test_jira.py` to verify Jira connection
+
+## 📝 Quick Setup Checklist
+
+After cloning the repository:
+
+- [ ] Install Python 3.8+ and Node.js 16+
+- [ ] Create virtual environment: `python -m venv backend/venv`
+- [ ] Activate virtual environment
+- [ ] Install backend dependencies: `pip install -r backend/requirements.txt`
+- [ ] Install frontend dependencies: `npm install` (in frontend directory)
+- [ ] Create `backend/.env` file with NVIDIA_API_KEY
+- [ ] (Optional) Add GITHUB_TOKEN to `.env` for GitHub integration
+- [ ] (Optional) Add Jira credentials to `.env` for Jira integration
+- [ ] Start backend: `python backend/app.py`
+- [ ] Start frontend: `npm start` (in frontend directory)
+- [ ] Open http://localhost:3000 in your browser
 
 ---
 

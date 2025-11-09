@@ -26,9 +26,9 @@ NVIDIA_API_URL = os.environ.get('NVIDIA_API_URL', 'https://integrate.api.nvidia.
 
 # Debug: Check if API key is loaded (don't print the actual key)
 if NVIDIA_API_KEY:
-    print(f"✅ NVIDIA_API_KEY loaded (length: {len(NVIDIA_API_KEY)} characters)")
+    print(f"[OK] NVIDIA_API_KEY loaded (length: {len(NVIDIA_API_KEY)} characters)")
 else:
-    print("⚠️  NVIDIA_API_KEY is empty or not set")
+    print("[WARNING] NVIDIA_API_KEY is empty or not set")
 
 # Storage directories and database
 MOCKUPS_DIR = Path('mockups')
@@ -206,64 +206,7 @@ def serialize_mockup_row(row, include_html=False):
         mockup['html_content'] = row['html_content']
     return mockup
 
-def call_nvidia_nemotron(prompt, system_message):
-    """Call NVIDIA Nemotron API"""
-    if not NVIDIA_API_KEY or NVIDIA_API_KEY == '':
-        raise Exception("NVIDIA_API_KEY is not set. Please create a .env file in the backend directory with your API key.")
-    
-    # Clean the API key (remove any quotes or whitespace)
-    api_key = NVIDIA_API_KEY.strip().strip('"').strip("'")
-    
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    payload = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
-        'messages': [
-            {'role': 'system', 'content': system_message},
-            {'role': 'user', 'content': prompt}
-        ],
-        'temperature': 0.6,
-        'top_p': 0.95,
-        'max_tokens': 16000,
-        'frequency_penalty': 0,
-        'presence_penalty': 0,
-        'stream': False
-    }
-    
-    try:
-        # Debug logging (don't log the full API key)
-        print(f"Making API request to: {NVIDIA_API_URL}")
-        print(f"API Key present: {bool(api_key)}, length: {len(api_key)}")
-        print(f"Model: {payload['model']}")
-        
-        response = requests.post(NVIDIA_API_URL, headers=headers, json=payload, timeout=120)
-        response.raise_for_status()
-        result = response.json()
-        if 'choices' not in result or len(result['choices']) == 0:
-            raise Exception("No choices in API response")
-        return result['choices'][0]['message']['content']
-    except requests.exceptions.RequestException as e:
-        print(f"Error calling NVIDIA API (RequestException): {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            status_code = e.response.status_code
-            print(f"Response status: {status_code}")
-            print(f"Response body: {e.response.text}")
-            
-            if status_code == 401:
-                raise Exception("Invalid API key. Please check your NVIDIA_API_KEY in the .env file. Get your API key from https://build.nvidia.com/")
-            elif status_code == 429:
-                raise Exception("Rate limit exceeded. Please wait a moment and try again.")
-            elif status_code == 400:
-                raise Exception(f"Invalid request: {e.response.text}")
-            else:
-                raise Exception(f"API request failed with status {status_code}: {e.response.text}")
-        raise Exception(f"Failed to call NVIDIA API: {str(e)}")
-    except Exception as e:
-        print(f"Error calling NVIDIA API: {str(e)}")
-        raise Exception(f"Failed to process AI request: {str(e)}")
+from nemotron_client import call_nvidia_nemotron
 
 def generate_mock_html(prompt):
     """Generate a simple HTML mockup (fallback for development)"""
@@ -435,12 +378,29 @@ def generate_mockup():
     data = request.json
     prompt = data.get('prompt', '')
     project_name = data.get('project_name', 'Untitled Project')
+    github_repo_url = data.get('github_repo_url', '') or os.environ.get('GITHUB_REPO_URL', '')
     
     if not prompt:
         return jsonify({'error': 'Prompt is required'}), 400
     
-    # Create system message for mockup generation
-    system_message = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
+    # If GitHub repo URL is provided, use repo-aware generator to enhance with repo context
+    if github_repo_url:
+        try:
+            from repo_mockup_generator import generate_mockup_from_repo
+            print(f"Using GitHub repository context: {github_repo_url}")
+            html_content = generate_mockup_from_repo(github_repo_url, prompt, None)
+        except Exception as e:
+            print(f"Error using GitHub repo context: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print("Falling back to standard mockup generation")
+            # Fall back to standard generation
+            github_repo_url = None
+    
+    # Standard mockup generation (if no GitHub repo or if GitHub integration failed)
+    if not github_repo_url:
+        # Create system message for mockup generation
+        system_message = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
 
 Your mockups should:
 1. Be fully self-contained with inline CSS (no external dependencies)
@@ -453,9 +413,9 @@ Your mockups should:
 8. Use modern CSS features (flexbox, grid, gradients, shadows, etc.)
 
 Return ONLY the complete HTML code, no explanations or markdown formatting."""
-    
-    # Call NVIDIA Nemotron to generate HTML
-    html_content = call_nvidia_nemotron(prompt, system_message)
+        
+        # Call NVIDIA Nemotron to generate HTML
+        html_content = call_nvidia_nemotron(prompt, system_message)
     
     # Clean up the response (remove thinking tags and markdown code blocks)
     # Remove <think>...</think> sections that the model might include
@@ -494,7 +454,7 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
         print(f"Error generating screenshot: {str(e)}")
         # Continue without screenshot
     
-    # Save mockup metadata
+    # Save mockup metadata (include GitHub repo URL if used)
     mockup_data = {
         'id': mockup_id,
         'project_name': project_name,
@@ -502,7 +462,8 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
         'html_filename': html_filename,
         'screenshot_filename': screenshot_filename,
         'created_at': created_at,
-        'feedback': []
+        'feedback': [],
+        'github_repo_url': github_repo_url if github_repo_url else None
     }
 
     save_mockup_to_db(mockup_data, html_content)
@@ -510,7 +471,8 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
     return jsonify({
         'success': True,
         'mockup': mockup_data,
-        'html_content': html_content
+        'html_content': html_content,
+        'used_github_context': bool(github_repo_url)
     })
 
 @app.route('/api/mockups/<mockup_id>/html', methods=['GET'])
@@ -732,7 +694,6 @@ def update_mockup_html(mockup_id):
 @app.route('/api/mockups/<mockup_id>/submit', methods=['POST'])
 def submit_mockup_to_jira(mockup_id):
     """Submit mockup to Jira - analyzes mockup vs repo and creates multiple tickets"""
-
     try:
         # Get mockup data from database
         mockup = get_mockup_from_db(mockup_id)
@@ -754,7 +715,7 @@ def submit_mockup_to_jira(mockup_id):
         except Exception:
             request_data = {}
         
-        github_repo_url = request_data.get('github_repo_url') or "https://github.com/GraysenGould/TestBanking.git"
+        github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
         
         # Re-analyze repository to get current state
         from repo_mockup_generator import parse_github_url
@@ -818,253 +779,6 @@ def submit_mockup_to_jira(mockup_id):
             'success': False,
             'error': error_msg
         }), 500
-
-def call_nvidia_nemotron_chat(messages, system_message=None):
-    """Call NVIDIA Nemotron API with conversation history"""
-    if not NVIDIA_API_KEY or NVIDIA_API_KEY == '':
-        raise Exception("NVIDIA_API_KEY is not set. Please create a .env file in the backend directory with your API key.")
-    
-    api_key = NVIDIA_API_KEY.strip().strip('"').strip("'")
-    
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    # Build messages array
-    api_messages = []
-    if system_message:
-        api_messages.append({'role': 'system', 'content': system_message})
-    api_messages.extend(messages)
-    
-    payload = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
-        'messages': api_messages,
-        'temperature': 0.7,
-        'top_p': 0.95,
-        'max_tokens': 16000,
-        'frequency_penalty': 0,
-        'presence_penalty': 0,
-        'stream': False
-    }
-    
-    try:
-        response = requests.post(NVIDIA_API_URL, headers=headers, json=payload, timeout=120)
-        response.raise_for_status()
-        result = response.json()
-        if 'choices' not in result or len(result['choices']) == 0:
-            raise Exception("No choices in API response")
-        return result['choices'][0]['message']['content']
-    except requests.exceptions.RequestException as e:
-        print(f"Error calling NVIDIA API (RequestException): {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            status_code = e.response.status_code
-            if status_code == 401:
-                raise Exception("Invalid API key. Please check your NVIDIA_API_KEY in the .env file.")
-            elif status_code == 429:
-                raise Exception("Rate limit exceeded. Please wait a moment and try again.")
-            elif status_code == 400:
-                raise Exception(f"Invalid request: {e.response.text}")
-            else:
-                raise Exception(f"API request failed with status {status_code}: {e.response.text}")
-        raise Exception(f"Failed to call NVIDIA API: {str(e)}")
-    except Exception as e:
-        print(f"Error calling NVIDIA API: {str(e)}")
-        raise Exception(f"Failed to process AI request: {str(e)}")
-
-@app.route('/api/chat', methods=['POST'])
-def chat():
-    """Chat endpoint for conversational mockup generation"""
-    data = request.json
-    conversation_id = data.get('conversation_id')
-    message = data.get('message', '').strip()
-    
-    if not message:
-        return jsonify({'error': 'Message is required'}), 400
-    
-    # Initialize or retrieve conversation
-    if not conversation_id or conversation_id not in chat_conversations:
-        conversation_id = str(uuid.uuid4())
-        chat_conversations[conversation_id] = {
-            'messages': [],
-            'project_name': None,
-            'requirements': {}
-        }
-    
-    conversation = chat_conversations[conversation_id]
-    
-    # Add user message to conversation
-    conversation['messages'].append({'role': 'user', 'content': message})
-    
-    # System message for the AI assistant
-    system_message = """You are a helpful AI copilot assistant helping a Product Manager create a mockup for their product.
-
-Your role is to:
-1. Act as a copilot - ask thoughtful clarifying questions to understand the product requirements better
-2. Ask 2-3 relevant questions about:
-   - Key features and functionality
-   - Design preferences (colors, style, layout)
-   - Target audience and use case
-   - Specific components or pages needed
-3. ONLY skip questions if the user explicitly says:
-   - "no questions"
-   - "just generate it"
-   - "generate now"
-   - "skip questions"
-   - or similar explicit instruction to skip
-4. When you have enough information (after asking questions OR if user explicitly skips), respond with:
-   <READY_TO_GENERATE>
-   [A brief summary of what you'll create]
-   </READY_TO_GENERATE>
-
-Be conversational, friendly, and professional. Act as a helpful copilot that asks smart questions to create better mockups. Only generate immediately if the user explicitly tells you to skip questions."""
-    
-    try:
-        # Call AI with conversation history
-        ai_response = call_nvidia_nemotron_chat(
-            conversation['messages'],
-            system_message
-        )
-        
-        # Add AI response to conversation
-        conversation['messages'].append({'role': 'assistant', 'content': ai_response})
-        
-        # Check if AI is ready to generate mockup
-        ready_to_generate = '<READY_TO_GENERATE>' in ai_response and '</READY_TO_GENERATE>' in ai_response
-        
-        response_data = {
-            'success': True,
-            'conversation_id': conversation_id,
-            'message': ai_response,
-            'ready_to_generate': ready_to_generate
-        }
-        
-        # If ready, extract summary and prepare for generation
-        if ready_to_generate:
-            # Extract summary between tags
-            start_tag = ai_response.find('<READY_TO_GENERATE>')
-            end_tag = ai_response.find('</READY_TO_GENERATE>')
-            if start_tag != -1 and end_tag != -1:
-                summary = ai_response[start_tag + len('<READY_TO_GENERATE>'):end_tag].strip()
-                response_data['generation_summary'] = summary
-                
-                # Build comprehensive prompt from conversation
-                full_conversation = "\n".join([
-                    f"{msg['role'].upper()}: {msg['content']}" 
-                    for msg in conversation['messages']
-                ])
-                
-                generation_prompt = f"""Based on the following conversation, generate a complete HTML mockup:
-
-{full_conversation}
-
-Create a production-ready HTML mockup that fulfills all the requirements discussed. The mockup should be fully self-contained with inline CSS, modern design, responsive, and visually appealing."""
-                
-                # Generate the mockup
-                mockup_system_message = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
-
-Your mockups should:
-1. Be fully self-contained with inline CSS (no external dependencies)
-2. Use modern, professional design principles
-3. Include responsive design
-4. Use a cohesive color scheme
-5. Include placeholder content that makes sense for the use case
-6. Be visually appealing and suitable for stakeholder presentations
-7. Include semantic HTML5 elements
-8. Use modern CSS features (flexbox, grid, gradients, shadows, etc.)
-
-Return ONLY the complete HTML code, no explanations or markdown formatting."""
-                
-                html_content = call_nvidia_nemotron(generation_prompt, mockup_system_message)
-                
-                # Clean up HTML response - remove thinking tags
-                if '<think>' in html_content and '</think>' in html_content:
-                    start_idx = html_content.find('<think>')
-                    end_idx = html_content.find('</think>') + len('</think>')
-                    html_content = html_content[:start_idx] + html_content[end_idx:]
-                    html_content = html_content.strip()
-                
-                if '<think>' in html_content and '</think>' in html_content:
-                    start_idx = html_content.find('<think>')
-                    end_idx = html_content.find('</think>') + len('</think>')
-                    html_content = html_content[:start_idx] + html_content[end_idx:]
-                    html_content = html_content.strip()
-                
-                if '```html' in html_content:
-                    html_content = html_content.split('```html')[1].split('```')[0].strip()
-                elif '```' in html_content:
-                    html_content = html_content.split('```')[1].split('```')[0].strip()
-                
-                # Generate unique ID for this mockup
-                mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S%f')
-                created_at = datetime.now().isoformat()
-                
-                # Extract project name from conversation (use first user message or default)
-                project_name = conversation.get('project_name') or 'Chat Generated Mockup'
-                if not project_name or project_name == 'Chat Generated Mockup':
-                    # Try to extract from first user message
-                    first_user_msg = next((msg['content'] for msg in conversation['messages'] if msg['role'] == 'user'), None)
-                    if first_user_msg:
-                        # Use first few words as project name
-                        project_name = first_user_msg[:50].strip()
-                
-                # Save HTML file
-                html_filename = f'mockup_{mockup_id}.html'
-                html_path = MOCKUPS_DIR / html_filename
-                with open(html_path, 'w', encoding='utf-8') as f:
-                    f.write(html_content)
-                
-                # Generate screenshot
-                screenshot_filename = f'mockup_{mockup_id}.png'
-                try:
-                    hti.screenshot(
-                        html_str=html_content,
-                        save_as=screenshot_filename,
-                        size=(1400, 900)
-                    )
-                except Exception as e:
-                    print(f"Error generating screenshot: {str(e)}")
-                
-                # Save mockup metadata
-                mockup_data = {
-                    'id': mockup_id,
-                    'project_name': project_name,
-                    'prompt': full_conversation[:500],  # Truncate for storage
-                    'html_filename': html_filename,
-                    'screenshot_filename': screenshot_filename,
-                    'created_at': created_at,
-                    'feedback': []
-                }
-                
-                save_mockup_to_db(mockup_data, html_content)
-                
-                # Add mockup to response
-                response_data['mockup'] = mockup_data
-                response_data['html_content'] = html_content
-                
-                # Clean up conversation (optional - you might want to keep it)
-                # del chat_conversations[conversation_id]
-        
-        return jsonify(response_data)
-        
-    except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'conversation_id': conversation_id
-        }), 500
-
-@app.route('/api/chat/<conversation_id>', methods=['GET'])
-def get_conversation(conversation_id):
-    """Get conversation history"""
-    if conversation_id not in chat_conversations:
-        return jsonify({'error': 'Conversation not found'}), 404
-    
-    return jsonify({
-        'success': True,
-        'conversation': chat_conversations[conversation_id]
-    })
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001, host='127.0.0.1')

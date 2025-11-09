@@ -10,7 +10,8 @@ import {
   User,
   Edit,
   Save,
-  Bot
+  Bot,
+  CheckCircle
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
 import './MockupViewer.css';
@@ -23,6 +24,7 @@ function MockupViewer({ mockup, onBack }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     setHtmlContent(mockup.html_content);
@@ -140,6 +142,61 @@ function MockupViewer({ mockup, onBack }) {
     }
   };
 
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const response = await axios.post(API_ENDPOINTS.SUBMIT_MOCKUP(mockup.id));
+      
+      if (response.data.success) {
+        const tickets = response.data.tickets || [];
+        const successfulTickets = tickets.filter(t => t.success);
+        const failedTickets = tickets.filter(t => !t.success);
+        
+        let message = `Successfully created ${successfulTickets.length} ticket(s) in Jira!\n\n`;
+        
+        if (successfulTickets.length > 0) {
+          message += 'Created Tickets:\n';
+          successfulTickets.forEach((ticket, idx) => {
+            message += `\n${idx + 1}. ${ticket.title}\n`;
+            message += `   Issue: ${ticket.issue_key}\n`;
+            message += `   Priority: ${ticket.priority === 1 ? 'High' : ticket.priority === 2 ? 'Medium' : 'Low'}\n`;
+            message += `   Difficulty: ${ticket.difficulty}/10\n`;
+            message += `   URL: ${ticket.issue_url}\n`;
+          });
+        }
+        
+        if (failedTickets.length > 0) {
+          message += `\n\nFailed to create ${failedTickets.length} ticket(s):\n`;
+          failedTickets.forEach((ticket, idx) => {
+            message += `\n${idx + 1}. ${ticket.title}: ${ticket.error || 'Unknown error'}\n`;
+          });
+        }
+        
+        alert(message);
+      } else {
+        throw new Error(response.data.error || 'Failed to submit mockup');
+      }
+    } catch (err) {
+      console.error('Error submitting mockup to Jira:', err);
+      console.error('Error response:', err.response?.data);
+      
+      // Get detailed error message
+      let errorMsg = 'Failed to submit mockup to Jira';
+      if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      // Show detailed error
+      alert(`Failed to submit mockup to Jira:\n\n${errorMsg}\n\nPlease check:\n1. Jira credentials are set in backend/.env\n2. Project key "KAN" exists in your Jira instance\n3. Issue type "Task" exists in that project\n4. You have permission to create issues`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -167,6 +224,14 @@ function MockupViewer({ mockup, onBack }) {
           <button className="action-button download-button" onClick={handleDownloadHTML}>
             <Download />
             Download HTML
+          </button>
+          <button 
+            className="action-button submit-button" 
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            <CheckCircle />
+            {submitting ? 'Submitting...' : 'Submit'}
           </button>
         </div>
       </div>

@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
   ADD_FEEDBACK: (id) => `${API_BASE_URL}/api/mockups/${id}/feedback`,
   EDIT_HTML: `${API_BASE_URL}/api/edit-html`,
   REFINE_MOCKUP: `${API_BASE_URL}/api/refine-mockup`,
+  SUBMIT_MOCKUP: (id) => `${API_BASE_URL}/api/mockups/${id}/submit`,
 };
 
 export default API_BASE_URL;
