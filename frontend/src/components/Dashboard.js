@@ -1,12 +1,12 @@
 import axios from 'axios';
-import { Clock, FolderOpen, Loader, Sparkles, Wand2, Send, Bot, User } from 'lucide-react';
+import { Clock, FolderOpen, Loader, Sparkles, Wand2, Send, Bot, User, Trello } from 'lucide-react';
 import React, { useEffect, useState, useRef } from 'react';
 import nvidiaLogo from '../assets/nvidia_logo.png';
 import pncLogo from '../assets/pnc_logo.png';
 import { API_ENDPOINTS } from '../config/api';
 import './Dashboard.css';
 
-function Dashboard({ onMockupGenerated }) {
+function Dashboard({ onMockupGenerated, onViewJiraBoard }) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -14,6 +14,8 @@ function Dashboard({ onMockupGenerated }) {
   const [conversationId, setConversationId] = useState(null);
   const [pastProjects, setPastProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [creatingTickets, setCreatingTickets] = useState(false);
+  const [ticketCreationResult, setTicketCreationResult] = useState(null);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -108,11 +110,13 @@ function Dashboard({ onMockupGenerated }) {
             html_content: response.data.html_content
           };
           
-          // Add a system message about mockup being ready
+          // Add a system message about mockup being ready with options
           setTimeout(() => {
             setMessages(prev => [...prev, {
               role: 'system',
-              content: '🎉 Your mockup has been generated! Opening it now...'
+              content: '🎉 Your mockup has been generated! Opening it now...',
+              mockupGenerated: true,
+              conversationId: response.data.conversation_id
             }]);
             onMockupGenerated(mockupWithHtml);
             loadPastProjects();
@@ -126,6 +130,43 @@ function Dashboard({ onMockupGenerated }) {
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateJiraTickets = async (conversationId) => {
+    try {
+      setCreatingTickets(true);
+      setTicketCreationResult(null);
+      
+      // Get GitHub repo URL from environment or prompt user
+      const githubUrl = process.env.REACT_APP_GITHUB_REPO_URL || prompt('Enter GitHub repository URL:');
+      
+      if (!githubUrl) {
+        alert('GitHub repository URL is required to create tickets.');
+        return;
+      }
+      
+      const response = await axios.post(
+        API_ENDPOINTS.CREATE_TICKETS_FROM_CHAT(conversationId),
+        { github_repo_url: githubUrl }
+      );
+      
+      if (response.data.success) {
+        setTicketCreationResult(response.data);
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: `✅ Successfully created ${response.data.tickets_created} JIRA ticket(s)! You can view them in the JIRA Board.`
+        }]);
+      }
+    } catch (err) {
+      console.error('Error creating JIRA tickets:', err);
+      setError(err.response?.data?.error || 'Failed to create JIRA tickets.');
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: '❌ Failed to create JIRA tickets. Please try again or check your JIRA configuration.'
+      }]);
+    } finally {
+      setCreatingTickets(false);
     }
   };
 
@@ -171,10 +212,16 @@ function Dashboard({ onMockupGenerated }) {
               <Bot className="chat-header-icon" />
               <h2>Chat with AI Assistant</h2>
             </div>
-            <button className="new-chat-button" onClick={handleNewChat}>
-              <Sparkles size={16} />
-              New Chat
-            </button>
+            <div className="chat-header-actions">
+              <button className="jira-board-button" onClick={onViewJiraBoard}>
+                <Trello size={16} />
+                JIRA Board
+              </button>
+              <button className="new-chat-button" onClick={handleNewChat}>
+                <Sparkles size={16} />
+                New Chat
+              </button>
+            </div>
           </div>
 
           <div className="chat-messages" ref={chatContainerRef}>
@@ -191,6 +238,27 @@ function Dashboard({ onMockupGenerated }) {
                 </div>
                 <div className="message-content">
                   <div className="message-text">{msg.content}</div>
+                  {msg.mockupGenerated && msg.conversationId && (
+                    <div className="message-actions">
+                      <button 
+                        className="create-tickets-button"
+                        onClick={() => handleCreateJiraTickets(msg.conversationId)}
+                        disabled={creatingTickets}
+                      >
+                        {creatingTickets ? (
+                          <>
+                            <Loader className="spinning" size={16} />
+                            Creating Tickets...
+                          </>
+                        ) : (
+                          <>
+                            <Trello size={16} />
+                            Create JIRA Tickets
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

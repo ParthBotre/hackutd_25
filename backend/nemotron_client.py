@@ -16,13 +16,14 @@ NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY', '').strip()
 NVIDIA_API_URL = os.environ.get('NVIDIA_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions').strip()
 
 
-def call_nvidia_nemotron(prompt: str, system_message: str) -> str:
+def call_nvidia_nemotron(prompt: str, system_message: str, conversation_history: list = None) -> str:
     """
     Call NVIDIA Nemotron API to generate content
     
     Args:
         prompt: User prompt/request
         system_message: System message/instructions
+        conversation_history: Optional list of previous messages [{'role': 'user'/'assistant', 'content': '...'}]
     
     Returns:
         Generated content from Nemotron
@@ -38,12 +39,19 @@ def call_nvidia_nemotron(prompt: str, system_message: str) -> str:
         'Content-Type': 'application/json'
     }
     
+    # Build messages array
+    messages = [{'role': 'system', 'content': system_message}]
+    
+    # Add conversation history if provided
+    if conversation_history:
+        messages.extend(conversation_history)
+    
+    # Add current prompt
+    messages.append({'role': 'user', 'content': prompt})
+    
     payload = {
         'model': 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
-        'messages': [
-            {'role': 'system', 'content': system_message},
-            {'role': 'user', 'content': prompt}
-        ],
+        'messages': messages,
         'temperature': 0.6,
         'top_p': 0.95,
         'max_tokens': 16000,

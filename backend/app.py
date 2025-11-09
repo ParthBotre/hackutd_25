@@ -328,6 +328,180 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'PM Mockup Generator API is running'})
 
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Handle chat messages and manage conversation"""
+    try:
+        data = request.json
+        message = data.get('message', '')
+        conversation_id = data.get('conversation_id')
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Generate or use existing conversation ID
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
+        
+        # Initialize conversation if new
+        if conversation_id not in chat_conversations:
+            chat_conversations[conversation_id] = {
+                'messages': [],
+                'ready_to_generate': False,
+                'project_info': {}
+            }
+        
+        conversation = chat_conversations[conversation_id]
+        
+        # Add user message to conversation history
+        conversation['messages'].append({
+            'role': 'user',
+            'content': message
+        })
+        
+        # Create system prompt for the AI assistant
+        system_message = """You are a Product Manager assistant helping to gather requirements for mockup generation.
+
+Your goal is to understand the user's product vision through conversation. Ask clarifying questions about:
+- Target audience and user personas
+- Key features and functionality
+- Design preferences (colors, style, layout)
+- User flow and interactions
+- Any specific content or branding requirements
+
+When you have gathered enough information to create a comprehensive mockup, include the special tag <READY_TO_GENERATE> in your response with a complete summary of the requirements.
+
+Be conversational, friendly, and ask one or two questions at a time to avoid overwhelming the user."""
+
+        # Prepare conversation history for the AI
+        conversation_history = []
+        for msg in conversation['messages'][:-1]:  # All messages except the current one
+            conversation_history.append({
+                'role': msg['role'],
+                'content': msg['content']
+            })
+        
+        # Call NVIDIA Nemotron for response
+        ai_response = call_nvidia_nemotron(message, system_message, conversation_history)
+        
+        # Add AI response to conversation
+        conversation['messages'].append({
+            'role': 'assistant',
+            'content': ai_response
+        })
+        
+        # Check if AI is ready to generate mockup
+        ready_to_generate = '<READY_TO_GENERATE>' in ai_response and '</READY_TO_GENERATE>' in ai_response
+        
+        # If ready to generate, extract the summary and generate mockup
+        mockup_data = None
+        html_content = None
+        
+        if ready_to_generate:
+            # Extract the summary between tags
+            start_tag = '<READY_TO_GENERATE>'
+            end_tag = '</READY_TO_GENERATE>'
+            start_idx = ai_response.find(start_tag) + len(start_tag)
+            end_idx = ai_response.find(end_tag)
+            summary = ai_response[start_idx:end_idx].strip()
+            
+            # Generate mockup using the summary as prompt
+            system_message_mockup = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
+
+Your mockups should:
+1. Be fully self-contained with inline CSS (no external dependencies)
+2. Use modern, professional design principles
+3. Include responsive design
+4. Use a cohesive color scheme
+5. Include placeholder content that makes sense for the use case
+6. Be visually appealing and suitable for stakeholder presentations
+7. Include semantic HTML5 elements
+8. Use modern CSS features (flexbox, grid, gradients, shadows, etc.)
+
+Return ONLY the complete HTML code, no explanations or markdown formatting."""
+            
+            html_content = call_nvidia_nemotron(summary, system_message_mockup, [])
+            
+            # Clean up the HTML response
+            if '<think>' in html_content and '</think>' in html_content:
+                start_idx = html_content.find('<think>')
+                end_idx = html_content.find('</think>') + len('</think>')
+                html_content = html_content[:start_idx] + html_content[end_idx:]
+                html_content = html_content.strip()
+            
+            if '```html' in html_content:
+                html_content = html_content.split('```html')[1].split('```')[0].strip()
+            elif '```' in html_content:
+                html_content = html_content.split('```')[1].split('```')[0].strip()
+            
+            # Generate mockup metadata
+            mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S%f')
+            created_at = datetime.now().isoformat()
+            
+            # Save HTML file
+            html_filename = f'mockup_{mockup_id}.html'
+            html_path = MOCKUPS_DIR / html_filename
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            # Generate screenshot
+            screenshot_filename = f'mockup_{mockup_id}.png'
+            try:
+                hti.screenshot(
+                    html_str=html_content,
+                    save_as=screenshot_filename,
+                    size=(1400, 900)
+                )
+            except Exception as e:
+                print(f"Error generating screenshot: {str(e)}")
+            
+            # Create mockup data
+            mockup_data = {
+                'id': mockup_id,
+                'project_name': f"Chat Project {mockup_id}",
+                'prompt': summary,
+                'html_filename': html_filename,
+                'screenshot_filename': screenshot_filename,
+                'created_at': created_at,
+                'feedback': []
+            }
+            
+            # Save to database
+            save_mockup_to_db(mockup_data, html_content)
+            
+            conversation['ready_to_generate'] = True
+            conversation['mockup_id'] = mockup_id
+        
+        return jsonify({
+            'success': True,
+            'conversation_id': conversation_id,
+            'message': ai_response,
+            'ready_to_generate': ready_to_generate,
+            'mockup': mockup_data,
+            'html_content': html_content
+        })
+    
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/chat/<conversation_id>', methods=['GET'])
+def get_conversation(conversation_id):
+    """Get conversation history"""
+    if conversation_id not in chat_conversations:
+        return jsonify({'error': 'Conversation not found'}), 404
+    
+    return jsonify({
+        'conversation_id': conversation_id,
+        'messages': chat_conversations[conversation_id]['messages'],
+        'ready_to_generate': chat_conversations[conversation_id]['ready_to_generate']
+    })
+
 @app.route('/api/debug/api-key', methods=['GET'])
 def debug_api_key():
     """Debug endpoint to check API key status (without exposing the key)"""
@@ -717,6 +891,220 @@ def test_jira_connection_endpoint():
         return jsonify({
             'success': False,
             'connected': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/jira/tickets', methods=['GET'])
+def get_jira_tickets():
+    """Get all JIRA tickets from the board"""
+    try:
+        from jira_integration import get_board_issues, validate_jira_credentials
+        
+        if not validate_jira_credentials():
+            return jsonify({
+                'success': False,
+                'error': 'JIRA credentials not configured or invalid'
+            }), 401
+        
+        # Get board_id from query params, default to 1
+        board_id = request.args.get('board_id', 1, type=int)
+        
+        tickets = get_board_issues(board_id=board_id)
+        
+        # Format tickets for frontend
+        formatted_tickets = []
+        for ticket in tickets:
+            fields = ticket.get('fields', {})
+            formatted_tickets.append({
+                'key': ticket.get('key'),
+                'id': ticket.get('id'),
+                'summary': fields.get('summary', ''),
+                'status': fields.get('status', {}).get('name', 'Unknown'),
+                'statusCategory': fields.get('status', {}).get('statusCategory', {}).get('key', 'todo'),
+                'issueType': fields.get('issuetype', {}).get('name', 'Task'),
+                'issueTypeIcon': fields.get('issuetype', {}).get('iconUrl', ''),
+                'priority': fields.get('priority', {}).get('name', 'Medium') if fields.get('priority') else 'Medium',
+                'assignee': fields.get('assignee', {}).get('displayName', 'Unassigned') if fields.get('assignee') else 'Unassigned',
+                'assigneeAvatar': fields.get('assignee', {}).get('avatarUrls', {}).get('48x48', '') if fields.get('assignee') else '',
+                'created': fields.get('created', ''),
+                'updated': fields.get('updated', ''),
+                'url': f"{os.environ.get('JIRA_BASE_URL', 'https://hack-utd-automations.atlassian.net')}/browse/{ticket.get('key')}"
+            })
+        
+        return jsonify({
+            'success': True,
+            'tickets': formatted_tickets,
+            'count': len(formatted_tickets)
+        })
+    
+    except Exception as e:
+        print(f"Error fetching JIRA tickets: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/jira/tickets/<ticket_key>', methods=['GET'])
+def get_jira_ticket_detail(ticket_key):
+    """Get detailed information about a specific JIRA ticket"""
+    try:
+        from jira_integration import validate_jira_credentials
+        import requests
+        from requests.auth import HTTPBasicAuth
+        
+        if not validate_jira_credentials():
+            return jsonify({
+                'success': False,
+                'error': 'JIRA credentials not configured or invalid'
+            }), 401
+        
+        # Get JIRA credentials
+        JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "https://hack-utd-automations.atlassian.net")
+        JIRA_EMAIL = os.getenv("JIRA_EMAIL", "")
+        JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
+        
+        auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        
+        # Fetch ticket details
+        response = requests.get(
+            f"{JIRA_BASE_URL}/rest/api/3/issue/{ticket_key}",
+            headers=headers,
+            auth=auth,
+            verify=False,
+            timeout=30
+        )
+        response.raise_for_status()
+        ticket = response.json()
+        
+        fields = ticket.get('fields', {})
+        
+        # Format ticket detail
+        formatted_ticket = {
+            'key': ticket.get('key'),
+            'id': ticket.get('id'),
+            'summary': fields.get('summary', ''),
+            'description': fields.get('description', {}),
+            'status': fields.get('status', {}).get('name', 'Unknown'),
+            'statusCategory': fields.get('status', {}).get('statusCategory', {}).get('key', 'todo'),
+            'issueType': fields.get('issuetype', {}).get('name', 'Task'),
+            'issueTypeIcon': fields.get('issuetype', {}).get('iconUrl', ''),
+            'priority': fields.get('priority', {}).get('name', 'Medium') if fields.get('priority') else 'Medium',
+            'assignee': fields.get('assignee', {}).get('displayName', 'Unassigned') if fields.get('assignee') else 'Unassigned',
+            'assigneeAvatar': fields.get('assignee', {}).get('avatarUrls', {}).get('48x48', '') if fields.get('assignee') else '',
+            'reporter': fields.get('reporter', {}).get('displayName', 'Unknown') if fields.get('reporter') else 'Unknown',
+            'created': fields.get('created', ''),
+            'updated': fields.get('updated', ''),
+            'url': f"{JIRA_BASE_URL}/browse/{ticket.get('key')}"
+        }
+        
+        return jsonify({
+            'success': True,
+            'ticket': formatted_ticket
+        })
+    
+    except Exception as e:
+        print(f"Error fetching JIRA ticket detail: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/chat/<conversation_id>/create-tickets', methods=['POST'])
+def create_tickets_from_chat(conversation_id):
+    """Create JIRA tickets from a chat conversation mockup"""
+    try:
+        if conversation_id not in chat_conversations:
+            return jsonify({'error': 'Conversation not found'}), 404
+        
+        conversation = chat_conversations[conversation_id]
+        
+        if not conversation.get('mockup_id'):
+            return jsonify({'error': 'No mockup generated yet in this conversation'}), 400
+        
+        mockup_id = conversation['mockup_id']
+        
+        # Get mockup data from database
+        mockup = get_mockup_from_db(mockup_id)
+        if not mockup:
+            return jsonify({'error': 'Mockup not found'}), 404
+        
+        # Get GitHub repo URL from request or environment
+        data = request.get_json(silent=True) or {}
+        github_repo_url = data.get('github_repo_url') or os.environ.get('GITHUB_REPO_URL', '')
+        
+        if not github_repo_url:
+            return jsonify({
+                'error': 'GitHub repository URL is required for ticket generation'
+            }), 400
+        
+        # Get HTML content
+        html_path = MOCKUPS_DIR / mockup['html_filename']
+        if not html_path.exists():
+            return jsonify({'error': 'Mockup HTML file not found'}), 404
+        
+        with open(html_path, 'r', encoding='utf-8') as f:
+            mockup_html = f.read()
+        
+        # Analyze repository and create tickets
+        from repo_mockup_generator import parse_github_url
+        from github_integration import analyze_repo_for_mockup
+        from mockup_analyzer import analyze_mockup_vs_repo, create_tickets_from_analysis
+        
+        owner, repo_name = parse_github_url(github_repo_url)
+        if not owner or not repo_name:
+            return jsonify({'error': 'Invalid GitHub repository URL'}), 400
+        
+        print(f"Analyzing repository {owner}/{repo_name} for comparison with mockup")
+        
+        # Get repository data
+        repo_data = analyze_repo_for_mockup(owner, repo_name, mockup['prompt'], None)
+        
+        # Analyze differences and create tickets
+        print("Analyzing mockup vs repository to create tickets...")
+        tickets = analyze_mockup_vs_repo(mockup_html, repo_data, github_repo_url)
+        
+        print(f"Generated {len(tickets)} tickets from analysis")
+        
+        # Create tickets in Jira
+        results = create_tickets_from_analysis(tickets, github_repo_url, mockup_id)
+        
+        # Count successes and failures
+        successful = [r for r in results if r.get('success')]
+        failed = [r for r in results if not r.get('success')]
+        
+        return jsonify({
+            'success': True,
+            'message': f'Created {len(successful)} ticket(s) in Jira',
+            'tickets_created': len(successful),
+            'tickets_failed': len(failed),
+            'tickets': [
+                {
+                    'title': r.get('title', 'Unknown'),
+                    'issue_key': r.get('issue_key'),
+                    'issue_url': r.get('issue_url'),
+                    'difficulty': r.get('difficulty'),
+                    'priority': r.get('priority'),
+                    'success': r.get('success', False),
+                    'error': r.get('error') if not r.get('success') else None
+                }
+                for r in results
+            ]
+        })
+    
+    except Exception as e:
+        print(f"Error creating tickets from chat: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
             'error': str(e)
         }), 500
 

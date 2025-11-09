@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
   GENERATE_MOCKUP: `${API_BASE_URL}/api/generate-mockup`,
   CHAT: `${API_BASE_URL}/api/chat`,
   GET_CONVERSATION: (id) => `${API_BASE_URL}/api/chat/${id}`,
+  CREATE_TICKETS_FROM_CHAT: (id) => `${API_BASE_URL}/api/chat/${id}/create-tickets`,
   LIST_MOCKUPS: `${API_BASE_URL}/api/mockups`,
   GET_MOCKUP: (id) => `${API_BASE_URL}/api/mockups/${id}`,
   GET_MOCKUP_HTML: (id) => `${API_BASE_URL}/api/mockups/${id}/html`,
@@ -18,7 +19,9 @@ export const API_ENDPOINTS = {
   EDIT_HTML: `${API_BASE_URL}/api/edit-html`,
   REFINE_MOCKUP: `${API_BASE_URL}/api/refine-mockup`,
   SUBMIT_MOCKUP: (id) => `${API_BASE_URL}/api/mockups/${id}/submit`,
+  JIRA_TEST: `${API_BASE_URL}/api/jira/test`,
+  JIRA_TICKETS: `${API_BASE_URL}/api/jira/tickets`,
+  JIRA_TICKET_DETAIL: (key) => `${API_BASE_URL}/api/jira/tickets/${key}`,
 };
 
 export default API_BASE_URL;
-
