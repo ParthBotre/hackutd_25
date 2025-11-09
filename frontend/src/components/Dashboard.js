@@ -1,6 +1,8 @@
 import axios from 'axios';
-import { Loader, Sparkles, Wand2, Clock, FolderOpen } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { Clock, FolderOpen, Loader, Sparkles, Wand2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import nvidiaLogo from '../assets/nvidia_logo.png';
+import pncLogo from '../assets/pnc_logo.png';
 import { API_ENDPOINTS } from '../config/api';
 import './Dashboard.css';
 
@@ -90,13 +92,24 @@ function Dashboard({ onMockupGenerated }) {
     <div className="dashboard">
       <div className="dashboard-header">
         <div className="header-content">
-          <div className="logo-section">
-            <Sparkles className="logo-icon" />
-            <h1>PM Mockup Generator</h1>
+          <div className="header-top">
+            <div className="logo-section">
+              <Sparkles className="logo-icon" />
+              <h1>PM Genie</h1>
+            </div>
+            <div className="sponsor-logos">
+              <img src={pncLogo} alt="PNC Bank" className="sponsor-logo pnc-logo" />
+              <img src={nvidiaLogo} alt="NVIDIA" className="sponsor-logo nvidia-logo-img" />
+            </div>
           </div>
           <p className="subtitle">
             AI-Powered Mockup Generation for Product Managers
-            <span className="badge">Powered by NVIDIA Nemotron</span>
+            <span className="badge nvidia-badge">
+              <svg className="nvidia-logo-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
+              </svg>
+              Powered by NVIDIA Nemotron
+            </span>
           </p>
         </div>
       </div>
@@ -238,7 +251,12 @@ function Dashboard({ onMockupGenerated }) {
           <div className="info-card">
             <h3>✨ Key Features</h3>
             <ul>
-              <li>Powered by NVIDIA Nemotron AI</li>
+              <li className="nvidia-feature">
+                <svg className="nvidia-logo-inline" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
+                </svg>
+                Powered by NVIDIA Nemotron AI
+              </li>
               <li>Instant HTML mockup generation</li>
               <li>Visual preview with screenshots</li>
               <li>Feedback collection system</li>
@@ -250,7 +268,12 @@ function Dashboard({ onMockupGenerated }) {
           <div className="info-card challenge-card">
             <h3>🏆 Challenge Integration</h3>
             <p><strong>PNC Challenge:</strong> Supporting PMs in Prototyping & Testing phase</p>
-            <p><strong>NVIDIA Challenge:</strong> Multi-step workflow with AI agent integration</p>
+            <p className="nvidia-challenge">
+              <svg className="nvidia-logo-inline" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
+              </svg>
+              <strong>NVIDIA Challenge:</strong> Multi-step workflow with AI agent integration
+            </p>
           </div>
         </div>
       </div>

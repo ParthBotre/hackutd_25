@@ -4,11 +4,16 @@
 }
 
 .dashboard-header {
-  background: white;
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 24px;
   padding: 40px;
   margin-bottom: 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(251, 191, 36, 0.1),
+    inset 0 1px 0 rgba(251, 191, 36, 0.2);
 }
 
 .header-content {
@@ -16,28 +21,113 @@
   margin: 0 auto;
 }
 
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
 .logo-section {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin-bottom: 15px;
+}
+
+.sponsor-logos {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sponsor-logo {
+  height: 60px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  opacity: 0.95;
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+.sponsor-logo:hover {
+  opacity: 1;
+  transform: translateY(-3px) scale(1.05);
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.6));
+}
+
+.pnc-logo {
+  height: 55px;
+  filter: drop-shadow(0 4px 15px rgba(245, 128, 37, 0.5)) brightness(1.15);
+}
+
+.pnc-logo:hover {
+  filter: drop-shadow(0 8px 25px rgba(245, 128, 37, 0.7)) brightness(1.2);
+}
+
+.nvidia-logo-img {
+  height: 50px;
+  filter: drop-shadow(0 4px 15px rgba(118, 185, 0, 0.5)) brightness(1.15);
+}
+
+.nvidia-logo-img:hover {
+  filter: drop-shadow(0 8px 25px rgba(118, 185, 0, 0.7)) brightness(1.2);
+}
+
+@media (max-width: 768px) {
+  .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .sponsor-logos {
+    gap: 20px;
+    padding: 8px 15px;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .sponsor-logo {
+    height: 45px;
+  }
+  
+  .pnc-logo {
+    height: 42px;
+  }
+  
+  .nvidia-logo-img {
+    height: 38px;
+  }
 }
 
 .logo-icon {
   width: 40px;
   height: 40px;
-  color: #667eea;
+  color: #fbbf24;
+  filter: drop-shadow(0 0 15px rgba(251, 191, 36, 0.6));
 }
 
 .dashboard-header h1 {
   font-size: 2.5em;
-  color: #1a202c;
+  color: white;
   margin: 0;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -1px;
+  filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.5));
 }
 
 .subtitle {
   font-size: 1.1em;
-  color: #718096;
+  color: rgba(255, 255, 255, 0.7);
   display: flex;
   align-items: center;
   gap: 15px;
@@ -51,6 +141,47 @@
   border-radius: 20px;
   font-size: 0.85em;
   font-weight: 600;
+}
+
+.nvidia-badge {
+  background: linear-gradient(135deg, rgba(118, 185, 0, 0.15) 0%, rgba(118, 185, 0, 0.25) 100%);
+  border: 1px solid rgba(118, 185, 0, 0.5);
+  color: #76B900;
+  box-shadow: 0 0 30px rgba(118, 185, 0, 0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nvidia-badge:hover {
+  background: linear-gradient(135deg, rgba(118, 185, 0, 0.25) 0%, rgba(118, 185, 0, 0.35) 100%);
+  box-shadow: 0 0 40px rgba(118, 185, 0, 0.6);
+  transform: translateY(-1px);
+  transition: all 0.3s;
+}
+
+.nvidia-logo-icon {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 0 8px rgba(118, 185, 0, 0.6));
+}
+
+.nvidia-feature {
+  color: #76B900 !important;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nvidia-logo-inline {
+  width: 16px;
+  height: 16px;
+  color: #76B900;
+  filter: drop-shadow(0 0 8px rgba(118, 185, 0, 0.6));
+  flex-shrink: 0;
 }
 
 .dashboard-content {
@@ -68,10 +199,15 @@
 }
 
 .main-card {
-  background: white;
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: 24px;
   padding: 40px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(251, 191, 36, 0.08),
+    inset 0 1px 0 rgba(251, 191, 36, 0.15);
 }
 
 .card-header {
@@ -79,18 +215,25 @@
   align-items: center;
   gap: 15px;
   margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .card-icon {
   width: 32px;
   height: 32px;
-  color: #667eea;
+  color: #fbbf24;
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.6));
 }
 
 .card-header h2 {
   font-size: 1.8em;
-  color: #1a202c;
+  color: white;
   margin: 0;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffffff 0%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .generate-form {
@@ -107,7 +250,7 @@
 
 .form-group label {
   font-weight: 600;
-  color: #2d3748;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 1em;
   display: flex;
   flex-direction: column;
@@ -116,25 +259,33 @@
 
 .label-hint {
   font-weight: 400;
-  color: #718096;
+  color: rgba(255, 255, 255, 0.5);
   font-size: 0.85em;
 }
 
 .form-group input,
 .form-group textarea {
   padding: 15px;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
   font-size: 1em;
   font-family: inherit;
   transition: all 0.3s;
+  color: white;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(129, 140, 248, 0.5);
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1), 0 0 20px rgba(129, 140, 248, 0.2);
 }
 
 .form-group textarea {
@@ -149,34 +300,58 @@
 }
 
 .error-message {
-  background: #fff5f5;
-  border: 2px solid #fc8181;
-  color: #c53030;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
   padding: 15px;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: 500;
 }
 
 .generate-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  position: relative;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  color: #1a1a1f;
   padding: 18px 40px;
-  border: none;
+  border: 1px solid rgba(251, 191, 36, 0.3);
   border-radius: 12px;
   font-size: 1.1em;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 
+    0 0 50px rgba(251, 191, 36, 0.5),
+    0 8px 20px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+
+.generate-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.generate-button:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .generate-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 
+    0 0 70px rgba(251, 191, 36, 0.8),
+    0 12px 30px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 50%, #f59e0b 100%);
 }
 
 .generate-button:active:not(:disabled) {
@@ -184,7 +359,7 @@
 }
 
 .generate-button:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -193,7 +368,7 @@
   height: 20px;
 }
 
-.spinning {
+.loading-icon {
   animation: spin 1s linear infinite;
 }
 
@@ -213,9 +388,10 @@
 }
 
 .examples-section h3 {
-  color: #2d3748;
+  color: rgba(255, 255, 255, 0.9);
   margin-bottom: 20px;
   font-size: 1.3em;
+  font-weight: 700;
 }
 
 .examples-grid {
@@ -225,23 +401,24 @@
 }
 
 .example-card {
-  background: #f7fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
   padding: 15px;
   cursor: pointer;
   transition: all 0.3s;
+  backdrop-filter: blur(10px);
 }
 
 .example-card:hover {
-  border-color: #667eea;
-  background: #edf2f7;
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(255, 255, 255, 0.05);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
 }
 
 .example-card p {
-  color: #4a5568;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 0.95em;
   line-height: 1.5;
   margin: 0;
@@ -254,21 +431,26 @@
 }
 
 .info-card {
-  background: white;
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
   padding: 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .info-card h3 {
-  color: #1a202c;
+  color: white;
   margin-bottom: 20px;
   font-size: 1.3em;
+  font-weight: 700;
 }
 
 .info-card ol,
 .info-card ul {
-  color: #4a5568;
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1.8;
   padding-left: 20px;
 }
@@ -278,8 +460,10 @@
 }
 
 .challenge-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+  border: 1px solid rgba(129, 140, 248, 0.3);
   color: white;
+  box-shadow: 0 0 40px rgba(99, 102, 241, 0.2);
 }
 
 .challenge-card h3 {
@@ -287,14 +471,26 @@
 }
 
 .challenge-card p {
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(255, 255, 255, 0.85);
   margin-bottom: 10px;
   line-height: 1.6;
 }
 
 .challenge-card strong {
-  color: white;
+  color: #fbbf24;
   font-weight: 700;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+}
+
+.nvidia-challenge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nvidia-challenge strong {
+  color: #76B900;
+  text-shadow: 0 0 15px rgba(118, 185, 0, 0.6);
 }
 
 .past-projects-card {
@@ -320,98 +516,72 @@
   background: #a0aec0;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.section-icon {
-  width: 24px;
-  height: 24px;
-  color: #667eea;
-}
-
-.past-projects-card h3 {
-  color: #2d3748;
-  margin: 0;
-  font-size: 1.3em;
-}
-
-.loading-projects,
-.empty-projects {
-  text-align: center;
-  padding: 30px 20px;
-  color: #718096;
-}
-
-.loading-projects {
+.project-list {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 15px;
 }
 
-.loading-projects .spinning {
-  width: 32px;
-  height: 32px;
-  color: #667eea;
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #a0aec0;
 }
 
-.projects-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 15px;
+  color: #cbd5e0;
 }
 
-.project-card {
+.project-item {
   background: #f7fafc;
   border: 2px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 15px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
-.project-card:hover {
+.project-item:hover {
   border-color: #667eea;
-  background: white;
-  transform: translateX(4px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  background: #edf2f7;
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
 }
 
 .project-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: start;
   margin-bottom: 8px;
-  gap: 10px;
 }
 
-.project-header h4 {
-  color: #1a202c;
+.project-title {
+  font-weight: 600;
+  color: #2d3748;
   font-size: 1em;
   margin: 0;
-  font-weight: 600;
-  flex: 1;
-  word-break: break-word;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .project-date {
   display: flex;
   align-items: center;
-  gap: 4px;
-  color: #718096;
-  font-size: 0.75em;
-  white-space: nowrap;
-  flex-shrink: 0;
+  gap: 5px;
+  color: #a0aec0;
+  font-size: 0.85em;
+}
+
+.date-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .project-prompt {
-  color: #4a5568;
-  font-size: 0.85em;
+  color: #718096;
+  font-size: 0.9em;
   line-height: 1.4;
   margin: 0;
   display: -webkit-box;
@@ -420,3 +590,18 @@
   overflow: hidden;
 }
 
+.auth-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .auth-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
