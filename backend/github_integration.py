@@ -88,7 +88,7 @@ def get_file_content(repo_owner: str, repo_name: str, file_path: str, token: Opt
 
 def get_repo_readme(repo_owner: str, repo_name: str, token: Optional[str] = None) -> Optional[str]:
     """
-    Fetch README file from repository
+    Fetch README file from repository using GitHub's /readme endpoint
     
     Args:
         repo_owner: Repository owner
@@ -98,16 +98,23 @@ def get_repo_readme(repo_owner: str, repo_name: str, token: Optional[str] = None
     Returns:
         README content or None if not found
     """
-    readme_variants = ["README.md", "README.txt", "README", "readme.md"]
+    token = token or GITHUB_TOKEN
+    headers = {
+        "Accept": "application/vnd.github.v3.raw",  # Get raw text directly
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     
-    for readme_name in readme_variants:
-        try:
-            content = get_file_content(repo_owner, repo_name, readme_name, token)
-            return content
-        except:
-            continue
+    url = f"{GITHUB_API_BASE}/repos/{repo_owner}/{repo_name}/readme"
     
-    return None
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        # Response is already raw text with the .raw Accept header
+        return response.text
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching README: {str(e)}")
+        return None
 
 
 def get_repo_info(repo_owner: str, repo_name: str, token: Optional[str] = None) -> Dict:
