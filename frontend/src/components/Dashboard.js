@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { Clock, FolderOpen, Loader, Sparkles, Wand2, Send, Bot, User, Trello } from 'lucide-react';
 import React, { useEffect, useState, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import nvidiaLogo from '../assets/nvidia_logo.png';
 import pncLogo from '../assets/pnc_logo.png';
 import { API_ENDPOINTS } from '../config/api';
@@ -237,7 +239,11 @@ function Dashboard({ onMockupGenerated, onViewJiraBoard }) {
                   )}
                 </div>
                 <div className="message-content">
-                  <div className="message-text">{msg.content}</div>
+                  <div className="message-text">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                   {msg.mockupGenerated && msg.conversationId && (
                     <div className="message-actions">
                       <button 
