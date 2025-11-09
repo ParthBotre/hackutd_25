@@ -175,24 +175,41 @@
 
 .tab-content {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
 }
 
 .preview-container {
   width: 100%;
   height: 100%;
-  padding: 20px;
+  padding: 30px;
   background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .mockup-iframe {
-  width: 100%;
-  height: 100%;
+  width: 90%;
+  height: 90%;
+  max-width: 90%;
+  max-height: 90%;
   border: none;
   background: white;
   border-radius: 10px;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+/* Hide scrollbars in the iframe */
+.mockup-iframe::-webkit-scrollbar {
+  display: none;
+}
+
+.mockup-iframe {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .code-container {
