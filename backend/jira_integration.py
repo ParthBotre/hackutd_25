@@ -101,6 +101,30 @@ def get_board_issues(board_id: int = 1, max_results: int = 100):
     return issues
 
 
+def validate_jira_credentials() -> bool:
+    """
+    Validate that Jira credentials are configured
+    
+    Returns:
+        True if credentials are valid, False otherwise
+    """
+    if not JIRA_EMAIL or not JIRA_API_TOKEN:
+        return False
+    
+    try:
+        # Test connection by fetching projects
+        resp = requests.get(
+            f"{JIRA_BASE_URL}/rest/api/3/myself",
+            headers=headers,
+            auth=auth,
+            verify=False,
+            timeout=10
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 def create_enhanced_jira_ticket(
     title: str,
     description: str,
@@ -109,7 +133,7 @@ def create_enhanced_jira_ticket(
     priority: int,
     github_repo_url: str = "",
     mockup_id: str = "",
-    project_key: str = "KAN",
+    project_key: str = "SM",
     issue_type: str = "Task"
 ) -> dict:
     """
@@ -132,13 +156,21 @@ def create_enhanced_jira_ticket(
     if not JIRA_EMAIL or not JIRA_API_TOKEN:
         raise ValueError("JIRA_EMAIL and JIRA_API_TOKEN must be set in environment variables")
     
+    if not validate_jira_credentials():
+        raise ValueError("Invalid Jira credentials. Please check JIRA_EMAIL and JIRA_API_TOKEN")
+    
     # Map priority numbers to Jira priority names
+    # Ensure priority is within valid range
+    priority = max(1, min(3, priority))
     priority_map = {
         1: "Highest",
         2: "High", 
         3: "Medium"
     }
     priority_name = priority_map.get(priority, "Medium")
+    
+    # Ensure difficulty is within valid range
+    difficulty = max(1, min(10, difficulty))
     
     # Build description content
     description_content = []
@@ -300,7 +332,7 @@ def create_enhanced_jira_ticket(
         }
 
 
-def create_jira_ticket(mockup_data, project_key="KAN", issue_type="Task"):
+def create_jira_ticket(mockup_data, project_key="SM", issue_type="Task"):
     """
     Create a new Jira ticket with mockup information.
     
@@ -482,21 +514,90 @@ def create_jira_ticket(mockup_data, project_key="KAN", issue_type="Task"):
         }
 
 
+def test_jira_connection() -> dict:
+    """
+    Test Jira connection and return status
+    
+    Returns:
+        Dictionary with connection status and details
+    """
+    result = {
+        "connected": False,
+        "error": None,
+        "base_url": JIRA_BASE_URL,
+        "email_configured": bool(JIRA_EMAIL),
+        "token_configured": bool(JIRA_API_TOKEN)
+    }
+    
+    if not JIRA_EMAIL or not JIRA_API_TOKEN:
+        result["error"] = "Jira credentials not configured"
+        return result
+    
+    try:
+        # Test connection
+        resp = requests.get(
+            f"{JIRA_BASE_URL}/rest/api/3/myself",
+            headers=headers,
+            auth=auth,
+            verify=False,
+            timeout=10
+        )
+        
+        if resp.status_code == 200:
+            result["connected"] = True
+            user_data = resp.json()
+            result["user"] = user_data.get("displayName", "Unknown")
+        else:
+            result["error"] = f"Authentication failed with status {resp.status_code}"
+    except Exception as e:
+        result["error"] = str(e)
+    
+    return result
+
+
 if __name__ == "__main__":
     # Test the functions
-    print("Fetching all tickets from board 1 (KAN)...")
-    tickets = get_board_issues(board_id=1)
-    print(f"\nFound {len(tickets)} tickets:")
-    print("-" * 80)
+    print("=" * 80)
+    print("Jira Integration Test")
+    print("=" * 80)
+    print()
     
-    for ticket in tickets:
-        key = ticket.get("key", "N/A")
-        fields = ticket.get("fields", {})
-        summary = fields.get("summary", "No summary")
-        status = fields.get("status", {}).get("name", "Unknown")
-        issue_type = fields.get("issuetype", {}).get("name", "Unknown")
-        
-        print(f"{key}: {summary}")
-        print(f"  Type: {issue_type} | Status: {status}")
-        print()
+    # Test connection
+    print("1. Testing Jira connection...")
+    conn_result = test_jira_connection()
+    if conn_result["connected"]:
+        print(f"   ✓ Connected to Jira as: {conn_result.get('user')}")
+        print(f"   Base URL: {conn_result['base_url']}")
+    else:
+        print(f"   ✗ Connection failed: {conn_result.get('error')}")
+        print(f"   Email configured: {conn_result['email_configured']}")
+        print(f"   Token configured: {conn_result['token_configured']}")
+    print()
+    
+    if conn_result["connected"]:
+        print("2. Fetching all tickets from board 1 (KAN)...")
+        try:
+            tickets = get_board_issues(board_id=1)
+            print(f"   ✓ Found {len(tickets)} tickets")
+            print()
+            print("-" * 80)
+            
+            for ticket in tickets[:5]:  # Show first 5
+                key = ticket.get("key", "N/A")
+                fields = ticket.get("fields", {})
+                summary = fields.get("summary", "No summary")
+                status = fields.get("status", {}).get("name", "Unknown")
+                issue_type = fields.get("issuetype", {}).get("name", "Unknown")
+                
+                print(f"{key}: {summary}")
+                print(f"  Type: {issue_type} | Status: {status}")
+                print()
+            
+            if len(tickets) > 5:
+                print(f"... and {len(tickets) - 5} more tickets")
+        except Exception as e:
+            print(f"   ✗ Error fetching tickets: {str(e)}")
+    
+    print()
+    print("=" * 80)
 

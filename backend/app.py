@@ -691,6 +691,36 @@ def update_mockup_html(mockup_id):
         'message': 'Mockup updated successfully'
     })
 
+@app.route('/api/jira/test', methods=['GET'])
+def test_jira_connection_endpoint():
+    """Test Jira connection and return status"""
+    try:
+        from jira_integration import test_jira_connection
+        result = test_jira_connection()
+        
+        if result["connected"]:
+            return jsonify({
+                'success': True,
+                'connected': True,
+                'user': result.get('user'),
+                'base_url': result['base_url']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'connected': False,
+                'error': result.get('error'),
+                'email_configured': result['email_configured'],
+                'token_configured': result['token_configured']
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'connected': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/mockups/<mockup_id>/submit', methods=['POST'])
 def submit_mockup_to_jira(mockup_id):
     """Submit mockup to Jira - analyzes mockup vs repo and creates multiple tickets"""
@@ -715,7 +745,17 @@ def submit_mockup_to_jira(mockup_id):
         except Exception:
             request_data = {}
         
-        github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
+        # Try to get GitHub URL from request, mockup data, or environment
+        github_repo_url = (
+            request_data.get('github_repo_url') or 
+            mockup.get('github_repo_url') or 
+            os.environ.get('GITHUB_REPO_URL', '')
+        )
+        
+        if not github_repo_url:
+            return jsonify({
+                'error': 'GitHub repository URL is required for ticket generation'
+            }), 400
         
         # Re-analyze repository to get current state
         from repo_mockup_generator import parse_github_url
