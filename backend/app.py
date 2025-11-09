@@ -349,7 +349,9 @@ def chat():
                 'messages': [],
                 'ready_to_generate': False,
                 'project_info': {},
-                'readme': None
+                'readme': None,
+                'awaiting_confirmation': False,
+                'pending_mockup': None
             }
         
         conversation = chat_conversations[conversation_id]
@@ -384,31 +386,6 @@ def chat():
             'content': message
         })
         
-        # Check if user is explicitly requesting mockup generation
-        explicit_generate_keywords = ['generate', 'create', 'build', 'make', 'show me', 'give me', 'ready', 'done', 'go ahead']
-        user_wants_mockup = any(keyword in message.lower() for keyword in explicit_generate_keywords)
-        
-        # Create system prompt for the AI assistant
-        if user_wants_mockup or len(conversation['messages']) >= 4:
-            # User explicitly wants mockup or has had enough conversation
-            system_message = """You are a Product Manager assistant helping to gather requirements for mockup generation.
-
-IMPORTANT: The user has indicated they want to generate a mockup now. You MUST include the <READY_TO_GENERATE> tags in your response.
-
-Format your response as follows:
-1. Provide a brief, friendly confirmation
-2. Include a comprehensive summary of all requirements discussed wrapped in <READY_TO_GENERATE> and </READY_TO_GENERATE> tags
-
-The summary should include:
-- Target audience and user personas
-- Key features and functionality
-- Design preferences (colors, style, layout)
-- User flow and interactions
-- Any specific content or branding requirements
-
-CRITICAL: You MUST include both <READY_TO_GENERATE> and </READY_TO_GENERATE> tags around your summary."""
-        else:
-            system_message = """You are a Product Manager assistant helping to gather requirements for mockup generation.
         # Include README context if available
         tech_stack_context = ""
         readme_instruction = ""
@@ -416,10 +393,13 @@ CRITICAL: You MUST include both <READY_TO_GENERATE> and </READY_TO_GENERATE> tag
         if conversation.get('readme'):
             tech_stack_context = f"""
 
+========================================
 PROJECT README (ALREADY LOADED)
+========================================
 
 {conversation['readme'][:2500]}
 
+========================================
 """
             readme_instruction = """
 
@@ -436,27 +416,34 @@ DO NOT ask them to paste the README. You already have it!"""
 
 You can have normal conversations about product management, features, ideas, best practices, etc.
 
-ONLY generate a mockup when the user EXPLICITLY asks you to create/build/make/generate something specific (like "create a login page", "build a dashboard", "make a weather app").
+WHEN USER ASKS TO CREATE SOMETHING (first time):
+When the user asks to create/build/make something (like "create a login page", "build a dashboard"):
 
-When they want a mockup, respond with:
+1. FIRST, provide helpful suggestions and recommendations using this tag:
+<SUGGESTIONS>
+Suggest 3-5 key features or improvements for Version 1. Be specific and helpful.
+Example: "Here are some suggestions for your weather app v1:
+- Current weather display with temperature and conditions
+- 5-day forecast with icons
+- Location search functionality
+- Responsive mobile-first design
+- Dark/light theme toggle"
+</SUGGESTIONS>
+
+2. Then ask: "Would you like me to proceed with creating the mockup with these features, or would you like to modify anything?"
+
+WHEN USER CONFIRMS:
+If they say "yes", "proceed", "go ahead", "create it", "looks good", etc., then respond with:
 <READY_TO_GENERATE>
-[One sentence describing what they want]
+[Complete description including the suggested features]
 </READY_TO_GENERATE>
 
-Examples of when to generate:
-- "Create a weather app" → Generate
-- "Build a login page" → Generate  
-- "Make a dashboard" → Generate
-- "Design a landing page" → Generate
-
-When you have gathered enough information (after 2-3 exchanges) OR when the user explicitly asks to generate/create/build a mockup, you MUST include the special tags <READY_TO_GENERATE> and </READY_TO_GENERATE> in your response with a complete summary of the requirements.
-Examples of when NOT to generate (just chat normally):
-- "What are good features for a weather app?" → Chat normally, suggest features
+Examples of when NOT to suggest (just chat normally):
+- "What are good features for a weather app?" → Chat normally, answer the question
 - "How should I design my dashboard?" → Chat normally, give advice
-- "What's the best way to do X?" → Chat normally, provide guidance
 - "Tell me about Y" → Chat normally, explain
 
-Be friendly and helpful. Only use the <READY_TO_GENERATE> tags when they explicitly want you to create something."""
+Be friendly and helpful."""
 
         # Prepare conversation history for the AI
         conversation_history = []
@@ -484,34 +471,29 @@ Be friendly and helpful. Only use the <READY_TO_GENERATE> tags when they explici
             'content': ai_response
         })
         
-        # Check if AI is ready to generate mockup
-        # Also check if user explicitly requested generation (fallback)
-        ready_to_generate = (
-            ('<READY_TO_GENERATE>' in ai_response and '</READY_TO_GENERATE>' in ai_response) or
-            (user_wants_mockup and len(conversation['messages']) >= 4)
-        )
+        # Check if AI provided suggestions (first step)
+        has_suggestions = '<SUGGESTIONS>' in ai_response and '</SUGGESTIONS>' in ai_response
+        
+        # Check if AI is ready to generate mockup (second step)
+        ready_to_generate = '<READY_TO_GENERATE>' in ai_response and '</READY_TO_GENERATE>' in ai_response
+        
+        # Clean up suggestion tags from the display message
+        display_message = ai_response
+        if has_suggestions:
+            display_message = display_message.replace('<SUGGESTIONS>', '').replace('</SUGGESTIONS>', '').strip()
+            conversation['awaiting_confirmation'] = True
         
         # If ready to generate, extract the summary and generate mockup
         mockup_data = None
         html_content = None
         
         if ready_to_generate:
-            # Extract the summary between tags, or use conversation summary as fallback
+            # Extract the summary between tags
             start_tag = '<READY_TO_GENERATE>'
             end_tag = '</READY_TO_GENERATE>'
-            
-            if start_tag in ai_response and end_tag in ai_response:
-                start_idx = ai_response.find(start_tag) + len(start_tag)
-                end_idx = ai_response.find(end_tag)
-                summary = ai_response[start_idx:end_idx].strip()
-            else:
-                # Fallback: create summary from conversation history
-                conversation_summary = []
-                for msg in conversation['messages']:
-                    if msg['role'] == 'user':
-                        conversation_summary.append(f"User: {msg['content']}")
-                summary = "\n".join(conversation_summary)
-                print(f"[WARNING] AI did not include READY_TO_GENERATE tags, using conversation summary as fallback")
+            start_idx = ai_response.find(start_tag) + len(start_tag)
+            end_idx = ai_response.find(end_tag)
+            summary = ai_response[start_idx:end_idx].strip()
             
             # Generate mockup using the summary as prompt
             system_message_mockup = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
@@ -538,43 +520,17 @@ Return ONLY the complete HTML code starting with <!DOCTYPE html>, no explanation
             
             html_content = call_nvidia_nemotron(summary, system_message_mockup, [])
             
-            # Clean up the HTML response - remove reasoning blocks
+            # Clean up the HTML response
             if '<think>' in html_content and '</think>' in html_content:
                 start_idx = html_content.find('<think>')
                 end_idx = html_content.find('</think>') + len('</think>')
                 html_content = html_content[:start_idx] + html_content[end_idx:]
                 html_content = html_content.strip()
             
-            # Remove markdown code blocks if present
             if '```html' in html_content:
-                parts = html_content.split('```html')
-                if len(parts) > 1:
-                    html_content = parts[1].split('```')[0].strip()
+                html_content = html_content.split('```html')[1].split('```')[0].strip()
             elif '```' in html_content:
-                parts = html_content.split('```')
-                if len(parts) > 1:
-                    # Find the part that looks like HTML (contains <!DOCTYPE or <html)
-                    for part in parts:
-                        if '<!DOCTYPE' in part.upper() or '<html' in part.lower():
-                            html_content = part.strip()
-                            break
-                    else:
-                        # Fallback: take the longest part that's not empty
-                        html_content = max([p.strip() for p in parts if p.strip()], key=len)
-            
-            # Ensure HTML starts properly
-            html_content = html_content.strip()
-            if not html_content.startswith('<!DOCTYPE') and not html_content.startswith('<html'):
-                # Try to find HTML start
-                html_start = html_content.find('<!DOCTYPE')
-                if html_start == -1:
-                    html_start = html_content.find('<html')
-                if html_start > 0:
-                    html_content = html_content[html_start:]
-            
-            # Validate we have actual HTML
-            if not html_content or len(html_content) < 100:
-                raise Exception("Generated HTML content is too short or empty. The AI may not have generated valid HTML.")
+                html_content = html_content.split('```')[1].split('```')[0].strip()
             
             # Generate mockup metadata
             mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S%f')
@@ -617,7 +573,9 @@ Return ONLY the complete HTML code starting with <!DOCTYPE html>, no explanation
         return jsonify({
             'success': True,
             'conversation_id': conversation_id,
-            'message': ai_response,
+            'message': display_message,
+            'has_suggestions': has_suggestions,
+            'awaiting_confirmation': conversation.get('awaiting_confirmation', False),
             'ready_to_generate': ready_to_generate,
             'mockup': mockup_data,
             'html_content': html_content
