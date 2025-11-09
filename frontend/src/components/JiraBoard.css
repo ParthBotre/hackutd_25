@@ -1,6 +1,6 @@
 .jira-board {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #1a1a1f;
   padding: 2rem;
 }
 
@@ -9,10 +9,15 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
-  background: white;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.2);
   padding: 1.5rem 2rem;
-  border-radius: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 24px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(251, 191, 36, 0.1),
+    inset 0 1px 0 rgba(251, 191, 36, 0.2);
 }
 
 .jira-header .header-left {
@@ -23,8 +28,12 @@
 
 .jira-header h1 {
   margin: 0;
-  color: #667eea;
+  color: white;
   font-size: 1.8rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffffff 0%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .back-button {
@@ -32,18 +41,18 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: transparent;
-  color: #667eea;
-  border: 2px solid #667eea;
-  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 12px;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .back-button:hover {
-  background: #667eea;
-  color: white;
+  background: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.5);
   transform: translateY(-2px);
 }
 
@@ -52,18 +61,21 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: #667eea;
-  color: white;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #1a1a1f;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
 }
 
 .refresh-button:hover:not(:disabled) {
-  background: #5568d3;
+  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 100%);
   transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(251, 191, 36, 0.5);
 }
 
 .refresh-button:disabled {
@@ -72,10 +84,14 @@
 }
 
 .jira-filters {
-  background: white;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.15);
   padding: 1.5rem 2rem;
-  border-radius: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 24px;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(251, 191, 36, 0.05);
   margin-bottom: 2rem;
 }
 
@@ -90,10 +106,10 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: #f5f5f5;
-  color: #333;
-  border: 2px solid transparent;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -106,25 +122,27 @@
   min-width: 24px;
   height: 24px;
   padding: 0 8px;
-  background: #ddd;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   font-size: 0.875rem;
   font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .filter-button:hover {
-  background: #e8e8e8;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(251, 191, 36, 0.3);
 }
 
 .filter-button.active {
-  background: #667eea;
-  color: white;
-  border-color: #667eea;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
 }
 
 .filter-button.active .count {
-  background: rgba(255, 255, 255, 0.3);
-  color: white;
+  background: rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
 }
 
 .jira-loading,
@@ -135,9 +153,11 @@
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
-  background: white;
-  border-radius: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
 
@@ -145,12 +165,12 @@
 .jira-error p,
 .jira-empty p {
   margin-top: 1rem;
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 1.1rem;
 }
 
 .jira-error {
-  color: #e74c3c;
+  color: #fca5a5;
 }
 
 .jira-error-container {
@@ -161,36 +181,40 @@
 }
 
 .error-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   padding: 3rem;
-  border-radius: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 24px;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(239, 68, 68, 0.2);
   text-align: center;
   max-width: 600px;
 }
 
 .error-card svg {
-  color: #e74c3c;
+  color: #fca5a5;
   margin-bottom: 1rem;
 }
 
 .error-card h2 {
-  color: #333;
+  color: white;
   margin-bottom: 1rem;
 }
 
 .error-card p {
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 0.5rem;
 }
 
 .error-hint {
   margin-top: 1.5rem;
   padding: 1rem;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 8px;
-  color: #856404;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 12px;
+  color: #fbbf24;
   font-size: 0.95rem;
 }
 
@@ -201,10 +225,14 @@
 }
 
 .ticket-card {
-  background: white;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(251, 191, 36, 0.05);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -213,7 +241,10 @@
 
 .ticket-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 
+    0 15px 40px rgba(0, 0, 0, 0.4),
+    0 0 30px rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.3);
 }
 
 .ticket-header {
@@ -235,7 +266,7 @@
 
 .ticket-key {
   font-weight: 600;
-  color: #667eea;
+  color: #fbbf24;
   font-size: 0.95rem;
 }
 
@@ -263,7 +294,7 @@
 
 .ticket-summary {
   margin: 0;
-  color: #333;
+  color: white;
   font-size: 1.1rem;
   line-height: 1.4;
   font-weight: 600;
@@ -274,7 +305,7 @@
   flex-direction: column;
   gap: 0.75rem;
   padding-top: 0.5rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ticket-meta-item {
@@ -285,7 +316,7 @@
 }
 
 .meta-label {
-  color: #666;
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
@@ -315,6 +346,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .assignee-avatar {
@@ -329,12 +361,12 @@
   align-items: center;
   margin-top: auto;
   padding-top: 1rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ticket-dates {
   font-size: 0.85rem;
-  color: #999;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .ticket-link {
@@ -342,16 +374,19 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: #667eea;
-  color: white;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
   text-decoration: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid rgba(251, 191, 36, 0.3);
   transition: all 0.2s ease;
 }
 
 .ticket-link:hover {
-  background: #5568d3;
+  background: rgba(251, 191, 36, 0.3);
+  border-color: rgba(251, 191, 36, 0.5);
   transform: translateY(-1px);
 }
 

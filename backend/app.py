@@ -465,6 +465,13 @@ Be friendly and helpful."""
         # Call NVIDIA Nemotron for response
         ai_response = call_nvidia_nemotron(message, system_message, conversation_history)
         
+        # Clean up <think> tags from the response
+        if '<think>' in ai_response and '</think>' in ai_response:
+            start_idx = ai_response.find('<think>')
+            end_idx = ai_response.find('</think>') + len('</think>')
+            ai_response = ai_response[:start_idx] + ai_response[end_idx:]
+            ai_response = ai_response.strip()
+        
         # Add AI response to conversation
         conversation['messages'].append({
             'role': 'assistant',
