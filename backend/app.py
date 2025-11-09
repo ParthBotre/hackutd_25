@@ -1456,7 +1456,7 @@ Format as JSON array of tickets."""
                     difficulty=ticket.get('difficulty', 5),
                     priority=ticket.get('priority', 2),
                     mockup_id=mockup_id,
-                    project_key="SM",
+                    project_key="KAN",
                     issue_type="Task"
                 )
                 results.append(result)

@@ -133,7 +133,7 @@ def create_enhanced_jira_ticket(
     priority: int,
     github_repo_url: str = "",
     mockup_id: str = "",
-    project_key: str = "SM",
+    project_key: str = "KAN",
     issue_type: str = "Task"
 ) -> dict:
     """
@@ -332,7 +332,7 @@ def create_enhanced_jira_ticket(
         }
 
 
-def create_jira_ticket(mockup_data, project_key="SM", issue_type="Task"):
+def create_jira_ticket(mockup_data, project_key="KAN", issue_type="Task"):
     """
     Create a new Jira ticket with mockup information.
     
