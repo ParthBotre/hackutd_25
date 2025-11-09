@@ -349,43 +349,6 @@ function Dashboard({ onMockupGenerated, onViewJiraBoard }) {
               </div>
             )}
           </div>
-
-          <div className="info-card">
-            <h3>💬 How It Works</h3>
-            <ol>
-              <li>Chat with the AI assistant about your product idea</li>
-              <li>Answer clarifying questions about features and design</li>
-              <li>AI generates your mockup when it has full clarity</li>
-              <li>Review and refine your mockup as needed</li>
-            </ol>
-          </div>
-
-          <div className="info-card">
-            <h3>✨ Key Features</h3>
-            <ul>
-              <li className="nvidia-feature">
-                <svg className="nvidia-logo-inline" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
-                </svg>
-                Conversational AI interface
-              </li>
-              <li>Intelligent clarifying questions</li>
-              <li>Automatic mockup generation</li>
-              <li>Visual preview with screenshots</li>
-              <li>Iterative refinement workflow</li>
-            </ul>
-          </div>
-
-          <div className="info-card challenge-card">
-            <h3>🏆 Challenge Integration</h3>
-            <p><strong>PNC Challenge:</strong> Supporting PMs in Prototyping & Testing phase</p>
-            <p className="nvidia-challenge">
-              <svg className="nvidia-logo-inline" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
-              </svg>
-              <strong>NVIDIA Challenge:</strong> Multi-step workflow with AI agent integration
-            </p>
-          </div>
         </div>
       </div>
     </div>
