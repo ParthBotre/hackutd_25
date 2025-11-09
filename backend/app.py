@@ -348,10 +348,35 @@ def chat():
             chat_conversations[conversation_id] = {
                 'messages': [],
                 'ready_to_generate': False,
-                'project_info': {}
+                'project_info': {},
+                'readme': None
             }
         
         conversation = chat_conversations[conversation_id]
+        
+        # Check if user is asking to fetch/load README
+        fetch_readme_keywords = ['fetch readme', 'load readme', 'get readme', 'show readme', 'read readme']
+        should_fetch_readme = any(keyword in message.lower() for keyword in fetch_readme_keywords)
+        
+        if should_fetch_readme and not conversation.get('readme'):
+            github_url = os.environ.get('GITHUB_REPO_URL', '')
+            if github_url:
+                try:
+                    from repo_mockup_generator import parse_github_url
+                    from github_integration import get_repo_readme
+                    
+                    owner, repo_name = parse_github_url(github_url)
+                    if owner and repo_name:
+                        print(f"User requested README - Fetching from {owner}/{repo_name}...")
+                        github_token = os.environ.get('GITHUB_TOKEN', '')
+                        readme_content = get_repo_readme(owner, repo_name, github_token if github_token else None)
+                        if readme_content:
+                            conversation['readme'] = readme_content
+                            print(f"README loaded successfully ({len(readme_content)} chars)")
+                        else:
+                            print("No README found in repository")
+                except Exception as e:
+                    print(f"Could not fetch README: {str(e)}")
         
         # Add user message to conversation history
         conversation['messages'].append({
@@ -384,17 +409,54 @@ The summary should include:
 CRITICAL: You MUST include both <READY_TO_GENERATE> and </READY_TO_GENERATE> tags around your summary."""
         else:
             system_message = """You are a Product Manager assistant helping to gather requirements for mockup generation.
+        # Include README context if available
+        tech_stack_context = ""
+        readme_instruction = ""
+        
+        if conversation.get('readme'):
+            tech_stack_context = f"""
 
-Your goal is to understand the user's product vision through conversation. Ask clarifying questions about:
-- Target audience and user personas
-- Key features and functionality
-- Design preferences (colors, style, layout)
-- User flow and interactions
-- Any specific content or branding requirements
+PROJECT README (ALREADY LOADED)
+
+{conversation['readme'][:2500]}
+
+"""
+            readme_instruction = """
+
+CRITICAL: The user's GitHub README is ALREADY PROVIDED ABOVE. You have direct access to it.
+
+When the user asks:
+- "What tech stack am I using?" → Answer directly from the README above
+- "Tell me about my README" → Summarize the README above
+- "What technologies do I use?" → List them from the README above
+
+DO NOT ask them to paste the README. You already have it!"""
+        
+        system_message = f"""You are a helpful Product Manager assistant chatbot.{tech_stack_context}{readme_instruction}
+
+You can have normal conversations about product management, features, ideas, best practices, etc.
+
+ONLY generate a mockup when the user EXPLICITLY asks you to create/build/make/generate something specific (like "create a login page", "build a dashboard", "make a weather app").
+
+When they want a mockup, respond with:
+<READY_TO_GENERATE>
+[One sentence describing what they want]
+</READY_TO_GENERATE>
+
+Examples of when to generate:
+- "Create a weather app" → Generate
+- "Build a login page" → Generate  
+- "Make a dashboard" → Generate
+- "Design a landing page" → Generate
 
 When you have gathered enough information (after 2-3 exchanges) OR when the user explicitly asks to generate/create/build a mockup, you MUST include the special tags <READY_TO_GENERATE> and </READY_TO_GENERATE> in your response with a complete summary of the requirements.
+Examples of when NOT to generate (just chat normally):
+- "What are good features for a weather app?" → Chat normally, suggest features
+- "How should I design my dashboard?" → Chat normally, give advice
+- "What's the best way to do X?" → Chat normally, provide guidance
+- "Tell me about Y" → Chat normally, explain
 
-Be conversational, friendly, and ask one or two questions at a time to avoid overwhelming the user."""
+Be friendly and helpful. Only use the <READY_TO_GENERATE> tags when they explicitly want you to create something."""
 
         # Prepare conversation history for the AI
         conversation_history = []
@@ -403,6 +465,15 @@ Be conversational, friendly, and ask one or two questions at a time to avoid ove
                 'role': msg['role'],
                 'content': msg['content']
             })
+        
+        # Debug: Log if README is being used
+        if conversation.get('readme'):
+            print(f"[DEBUG] README context is available ({len(conversation['readme'])} chars)")
+            print(f"[DEBUG] First 200 chars of README: {conversation['readme'][:200]}")
+        else:
+            print("[DEBUG] No README context available")
+        
+        print(f"[DEBUG] System message length: {len(system_message)} chars")
         
         # Call NVIDIA Nemotron for response
         ai_response = call_nvidia_nemotron(message, system_message, conversation_history)
@@ -1325,7 +1396,7 @@ def create_tickets_from_chat(conversation_id):
 
 @app.route('/api/mockups/<mockup_id>/submit', methods=['POST'])
 def submit_mockup_to_jira(mockup_id):
-    """Submit mockup to Jira - analyzes mockup vs repo and creates multiple tickets"""
+    """Submit mockup to Jira - creates implementation tickets using AI analysis"""
     try:
         # Get mockup data from database
         mockup = get_mockup_from_db(mockup_id)
@@ -1353,29 +1424,84 @@ def submit_mockup_to_jira(mockup_id):
             return jsonify({
                 'error': 'GitHub repository URL is required for ticket generation'
             }), 400
+        from jira_integration import create_enhanced_jira_ticket
         
-        # Re-analyze repository to get current state
-        from repo_mockup_generator import parse_github_url
-        from github_integration import analyze_repo_for_mockup
-        from mockup_analyzer import analyze_mockup_vs_repo, create_tickets_from_analysis
+        # Use AI to analyze the mockup and generate implementation tickets
+        analysis_prompt = f"""Analyze this HTML mockup and create a list of implementation tickets.
+
+Mockup Description: {mockup['prompt']}
+
+HTML Preview (first 500 chars): {mockup_html[:500]}...
+
+Generate 3-5 implementation tickets covering:
+1. Frontend UI components
+2. Backend API/endpoints
+3. Database/data management
+4. Integration/testing
+
+For each ticket, provide:
+- Title (concise, action-oriented)
+- Description (detailed, with acceptance criteria)
+- Priority (1=High, 2=Medium, 3=Low)
+- Difficulty (1-10 scale)
+
+Format as JSON array of tickets."""
+
+        system_message = """You are a technical project manager creating JIRA tickets. Output ONLY valid JSON array format:
+[
+  {
+    "title": "Implement User Login Component",
+    "description": "Create login form with email/password fields. Include validation and error handling.",
+    "acceptance_criteria": ["Form validates input", "Shows error messages", "Handles authentication"],
+    "priority": 1,
+    "difficulty": 5
+  }
+]"""
+
+        print("Analyzing mockup with AI to generate tickets...")
+        ai_response = call_nvidia_nemotron(analysis_prompt, system_message, [])
         
-        owner, repo_name = parse_github_url(github_repo_url)
-        if not owner or not repo_name:
-            return jsonify({'error': 'Invalid GitHub repository URL'}), 400
+        # Parse AI response to extract tickets
+        import json
+        import re
         
-        print(f"Analyzing repository {owner}/{repo_name} for comparison with mockup")
+        # Clean up response - remove markdown code blocks if present
+        cleaned_response = ai_response
+        if '```json' in cleaned_response:
+            cleaned_response = cleaned_response.split('```json')[1].split('```')[0].strip()
+        elif '```' in cleaned_response:
+            cleaned_response = cleaned_response.split('```')[1].split('```')[0].strip()
         
-        # Get repository data
-        repo_data = analyze_repo_for_mockup(owner, repo_name, mockup['prompt'], None)
+        # Try to extract JSON from response
+        json_match = re.search(r'\[.*\]', cleaned_response, re.DOTALL)
+        if not json_match:
+            raise ValueError(f"AI did not return valid JSON format. Response: {ai_response[:200]}...")
         
-        # Analyze differences and create tickets
-        print("Analyzing mockup vs repository to create tickets...")
-        tickets = analyze_mockup_vs_repo(mockup_html, repo_data, github_repo_url)
+        tickets_data = json.loads(json_match.group())
+        print(f"Generated {len(tickets_data)} tickets from AI analysis")
         
-        print(f"Generated {len(tickets)} tickets from analysis")
-        
-        # Create tickets in Jira
-        results = create_tickets_from_analysis(tickets, github_repo_url, mockup_id)
+        # Create tickets in JIRA
+        results = []
+        for ticket in tickets_data:
+            try:
+                result = create_enhanced_jira_ticket(
+                    title=ticket['title'],
+                    description=ticket['description'],
+                    acceptance_criteria=ticket.get('acceptance_criteria', []),
+                    difficulty=ticket.get('difficulty', 5),
+                    priority=ticket.get('priority', 2),
+                    mockup_id=mockup_id,
+                    project_key="SM",
+                    issue_type="Task"
+                )
+                results.append(result)
+            except Exception as e:
+                print(f"Error creating ticket '{ticket['title']}': {str(e)}")
+                results.append({
+                    'success': False,
+                    'title': ticket['title'],
+                    'error': str(e)
+                })
         
         # Count successes and failures
         successful = [r for r in results if r.get('success')]

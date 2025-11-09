@@ -13,6 +13,11 @@ import {
   Bot,
   CheckCircle,
   MessageSquare
+  Trello,
+  X,
+  Loader,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
 import './MockupViewer.css';
@@ -28,6 +33,8 @@ function MockupViewer({ mockup, onBack }) {
   const [submitting, setSubmitting] = useState(false);
   const [simulatingFeedback, setSimulatingFeedback] = useState(false);
   const [simulatedFeedback, setSimulatedFeedback] = useState([]);
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [ticketResults, setTicketResults] = useState(null);
 
   useEffect(() => {
     setHtmlContent(mockup.html_content);
@@ -169,35 +176,20 @@ function MockupViewer({ mockup, onBack }) {
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    setShowTicketModal(true);
+    setTicketResults(null);
+    
     try {
       const response = await axios.post(API_ENDPOINTS.SUBMIT_MOCKUP(mockup.id));
       
       if (response.data.success) {
-        const tickets = response.data.tickets || [];
-        const successfulTickets = tickets.filter(t => t.success);
-        const failedTickets = tickets.filter(t => !t.success);
-        
-        let message = `Successfully created ${successfulTickets.length} ticket(s) in Jira!\n\n`;
-        
-        if (successfulTickets.length > 0) {
-          message += 'Created Tickets:\n';
-          successfulTickets.forEach((ticket, idx) => {
-            message += `\n${idx + 1}. ${ticket.title}\n`;
-            message += `   Issue: ${ticket.issue_key}\n`;
-            message += `   Priority: ${ticket.priority === 1 ? 'High' : ticket.priority === 2 ? 'Medium' : 'Low'}\n`;
-            message += `   Difficulty: ${ticket.difficulty}/10\n`;
-            message += `   URL: ${ticket.issue_url}\n`;
-          });
-        }
-        
-        if (failedTickets.length > 0) {
-          message += `\n\nFailed to create ${failedTickets.length} ticket(s):\n`;
-          failedTickets.forEach((ticket, idx) => {
-            message += `\n${idx + 1}. ${ticket.title}: ${ticket.error || 'Unknown error'}\n`;
-          });
-        }
-        
-        alert(message);
+        setTicketResults({
+          success: true,
+          message: response.data.message,
+          tickets: response.data.tickets || [],
+          tickets_created: response.data.tickets_created,
+          tickets_failed: response.data.tickets_failed
+        });
       } else {
         throw new Error(response.data.error || 'Failed to submit mockup');
       }
@@ -215,11 +207,19 @@ function MockupViewer({ mockup, onBack }) {
         errorMsg = err.message;
       }
       
-      // Show detailed error
-      alert(`Failed to submit mockup to Jira:\n\n${errorMsg}\n\nPlease check:\n1. Jira credentials are set in backend/.env\n2. Project key "KAN" exists in your Jira instance\n3. Issue type "Task" exists in that project\n4. You have permission to create issues`);
+      setTicketResults({
+        success: false,
+        error: errorMsg,
+        details: 'Please check:\n1. Jira credentials are set in backend/.env\n2. GitHub repository URL is configured\n3. Project key "SM" exists in your Jira instance\n4. Issue type "Task" exists in that project\n5. You have permission to create issues'
+      });
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const closeTicketModal = () => {
+    setShowTicketModal(false);
+    setTicketResults(null);
   };
 
   const formatDate = (dateString) => {
@@ -263,8 +263,8 @@ function MockupViewer({ mockup, onBack }) {
             onClick={handleSubmit}
             disabled={submitting}
           >
-            <CheckCircle />
-            {submitting ? 'Submitting...' : 'Submit'}
+            <Trello />
+            {submitting ? 'Creating Tickets...' : 'Create JIRA Tickets'}
           </button>
         </div>
       </div>
@@ -425,6 +425,125 @@ function MockupViewer({ mockup, onBack }) {
           </div>
         </div>
       </div>
+
+      {/* Ticket Creation Modal */}
+      {showTicketModal && (
+        <div className="modal-overlay" onClick={closeTicketModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>
+                <Trello size={24} />
+                JIRA Ticket Creation
+              </h2>
+              <button className="modal-close" onClick={closeTicketModal}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {submitting ? (
+                <div className="modal-loading">
+                  <Loader className="spinning" size={48} />
+                  <h3>Creating JIRA Tickets...</h3>
+                  <p>Analyzing your mockup and generating implementation tickets</p>
+                  <div className="loading-steps">
+                    <div className="loading-step">
+                      <CheckCircle size={16} />
+                      <span>Analyzing mockup design</span>
+                    </div>
+                    <div className="loading-step">
+                      <CheckCircle size={16} />
+                      <span>Comparing with repository structure</span>
+                    </div>
+                    <div className="loading-step active">
+                      <Loader className="spinning" size={16} />
+                      <span>Creating detailed implementation tickets</span>
+                    </div>
+                  </div>
+                </div>
+              ) : ticketResults ? (
+                ticketResults.success ? (
+                  <div className="modal-success">
+                    <div className="success-header">
+                      <CheckCircle size={48} className="success-icon" />
+                      <h3>Successfully Created {ticketResults.tickets_created} Ticket(s)!</h3>
+                      <p className="success-message">{ticketResults.message}</p>
+                    </div>
+
+                    <div className="tickets-list">
+                      {ticketResults.tickets.map((ticket, idx) => (
+                        <div key={idx} className={`ticket-item ${ticket.success ? 'success' : 'failed'}`}>
+                          <div className="ticket-item-header">
+                            {ticket.success ? (
+                              <CheckCircle size={20} className="ticket-icon success" />
+                            ) : (
+                              <AlertCircle size={20} className="ticket-icon error" />
+                            )}
+                            <h4>{ticket.title}</h4>
+                          </div>
+                          
+                          {ticket.success ? (
+                            <div className="ticket-details">
+                              <div className="ticket-info-row">
+                                <span className="label">Issue Key:</span>
+                                <span className="value">{ticket.issue_key}</span>
+                              </div>
+                              <div className="ticket-info-row">
+                                <span className="label">Priority:</span>
+                                <span className={`priority-badge priority-${ticket.priority}`}>
+                                  {ticket.priority === 1 ? 'High' : ticket.priority === 2 ? 'Medium' : 'Low'}
+                                </span>
+                              </div>
+                              <div className="ticket-info-row">
+                                <span className="label">Difficulty:</span>
+                                <span className="difficulty-badge">{ticket.difficulty}/10</span>
+                              </div>
+                              <a 
+                                href={ticket.issue_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="ticket-link"
+                              >
+                                <span>View in JIRA</span>
+                                <ExternalLink size={14} />
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="ticket-error">
+                              <p>{ticket.error || 'Unknown error occurred'}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {ticketResults.tickets_failed > 0 && (
+                      <div className="warning-message">
+                        ⚠️ {ticketResults.tickets_failed} ticket(s) failed to create. Please check the errors above.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="modal-error">
+                    <AlertCircle size={48} className="error-icon" />
+                    <h3>Failed to Create Tickets</h3>
+                    <p className="error-message">{ticketResults.error}</p>
+                    <div className="error-details">
+                      <pre>{ticketResults.details}</pre>
+                    </div>
+                  </div>
+                )
+              ) : null}
+            </div>
+
+            <div className="modal-footer">
+              <button className="modal-button close-button" onClick={closeTicketModal}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
