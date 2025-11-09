@@ -20,48 +20,84 @@ This project demonstrates:
 
 ## ✨ Features
 
-- 🤖 **AI-Powered Generation**: Leverages NVIDIA Nemotron for intelligent mockup creation
-- 🔗 **GitHub Integration**: Analyze repositories and generate context-aware mockups
-- 📋 **Jira Integration**: Automatically create development tickets from mockups
+- 🤖 **AI-Powered Chatbot**: Interactive conversational AI assistant with markdown support for product management guidance
+- 💬 **Two-Step Mockup Generation**: AI provides suggestions first, then generates HTML after confirmation
+- 🔗 **GitHub Integration**: Analyze repositories and generate context-aware mockups with README access
+- 📋 **JIRA Integration**: 
+  - View JIRA tickets in beautiful dashboard
+  - Automatically create development tickets from mockups
+  - Live JIRA data access for chatbot - query ticket status, assignees, and project status
+  - Smart ticket creation with AI-generated acceptance criteria, difficulty, and priority
 - ⚡ **Instant Preview**: Real-time HTML rendering with iframe preview
 - ✏️ **AI-Powered HTML Editor**: Edit HTML with natural language instructions using AI Assistant
 - 💾 **SQLite Database**: Persistent storage for all mockups and edits
-- 📚 **Past Projects**: View and revisit all your previously generated mockups
+- 📚 **Past Projects**: View and revisit all your previously generated mockups in a beautiful grid layout
 - 🔄 **Auto-Save**: AI edits are automatically saved to the database
 - 🔄 **AI Refinement**: Refine mockups with AI assistance
 - 📥 **Export Ready**: Download HTML files to share with development teams
-- 🎨 **Modern UI**: Beautiful, responsive dashboard built with React
+- 🎨 **Modern UI**: Beautiful, responsive dashboard with golden-themed glassmorphism design
 - 🔍 **Code Editor**: Direct HTML editing with syntax highlighting
-- 🎯 **Smart Ticket Generation**: Compare mockups with repos and create prioritized Jira tickets
+- 🎯 **Smart Ticket Generation**: Compare mockups with repos and create prioritized JIRA tickets
 - 🔧 **MCP Server**: Model Context Protocol server for GitHub-aware mockup generation
+- 💡 **Markdown Support**: Full markdown rendering in chat messages with syntax highlighting for code blocks
+- 📱 **Responsive Design**: Mobile-friendly interface with flexible layouts
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Frontend (React)                         │
-│  - Dashboard: Prompt input, past projects list              │
+│  - Dashboard: AI Chatbot, JIRA Board Button, Past Projects  │
 │  - MockupViewer: Preview, code editor, AI editor assistant  │
+│  - JiraBoard: Ticket dashboard with status filters          │
+│  - Markdown rendering with react-markdown                    │
 └────────────────────┬────────────────────────────────────────┘
                      │
-                     │ REST API
+                     │ REST API (Port 5001)
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                   Backend (Flask)                            │
-│  - API endpoints for generation & editing                    │
+│  - Chat API with conversation history                        │
+│  - JIRA integration (read/write)                             │
+│  - GitHub README fetching                                    │
 │  - HTML to image conversion                                  │
 │  - SQLite database for persistent storage                    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     │ API Calls
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│              NVIDIA Nemotron API                             │
-│  - Natural language to HTML conversion                       │
-│  - HTML editing with natural language instructions           │
-│  - Mockup refinement                                         │
-└─────────────────────────────────────────────────────────────┘
+│  - AI-powered ticket generation                              │
+└──────┬─────────────┬────────────────────┬───────────────────┘
+       │             │                    │
+       │ API Calls   │ REST API           │ REST API
+       │             │                    │
+┌──────▼─────────────▼───┐  ┌─────────────▼──────────────────┐
+│  NVIDIA Nemotron API    │  │   External Services            │
+│  - Chat completions     │  │  - JIRA (Atlassian)           │
+│  - HTML generation      │  │  - GitHub (README fetching)   │
+│  - Ticket analysis      │  │                                │
+│  - Context understanding│  │                                │
+└─────────────────────────┘  └────────────────────────────────┘
 ```
+
+## 🛠️ Technology Stack
+
+### Frontend
+- **React 18** - UI framework
+- **Axios** - HTTP client for API calls
+- **react-markdown** - Markdown rendering in chat
+- **remark-gfm** - GitHub Flavored Markdown support
+- **Lucide React** - Icon library
+- **CSS Grid & Flexbox** - Responsive layouts
+
+### Backend
+- **Flask** - Python web framework
+- **NVIDIA Nemotron** - AI model (llama-3.3-nemotron-super-49b-v1.5)
+- **SQLite** - Local database
+- **html2image** - Screenshot generation
+- **python-dotenv** - Environment management
+- **requests** - HTTP library for external APIs
+
+### Integrations
+- **JIRA REST API** - Ticket management
+- **GitHub REST API** - Repository analysis
+- **NVIDIA API Catalog** - AI capabilities
 
 ## 🚀 Getting Started
 
@@ -421,24 +457,54 @@ Before starting, verify you have everything:
 
 ## 📖 Usage Guide
 
-### 1. Generate a Mockup
+### 1. Chat with AI Assistant
 
 1. Open the dashboard at `http://localhost:3000`
-2. Enter a project name (optional)
-3. Describe your desired mockup in the prompt field. Be specific about:
-   - Layout requirements
-   - Features to include
-   - Visual style preferences
-   - Target audience
-4. Click "Generate Mockup"
-5. Wait for AI to generate your mockup (15-30 seconds)
+2. Use the chat interface to:
+   - Ask questions about product management
+   - Get suggestions for features
+   - Query JIRA tickets: "How many tickets are in progress?"
+   - Check project status: "What tickets are unassigned?"
+   - Request to fetch README: "fetch readme" to load your tech stack context
+3. Chat supports **full markdown** formatting:
+   - **Bold text** with `**text**`
+   - *Italic text* with `*text*`
+   - `Inline code` with backticks
+   - Code blocks with triple backticks
+   - Lists, headers, and more!
+
+### 2. Generate a Mockup (Two-Step Process)
+
+1. Ask the AI to create something: "Create a login page" or "Build a dashboard"
+2. **Step 1 - Suggestions**: AI will provide 3-5 feature suggestions for Version 1
+3. Review the suggestions and respond:
+   - "Yes, proceed" or "looks good" to continue
+   - Provide modifications: "Add a dark mode toggle"
+4. **Step 2 - Generation**: AI generates the HTML mockup with your approved features
+5. Wait for the mockup to generate (15-30 seconds)
 
 **Example Prompts**:
-- "Create a modern landing page for a fintech SaaS product with a hero section, features grid, and pricing table"
-- "Design a dashboard for a project management tool with sidebar navigation, task cards, and progress charts"
-- "Build a product page for an e-commerce site with image gallery, product details, and add to cart button"
+- "Create a modern landing page for a fintech SaaS product"
+- "Build a dashboard for a project management tool"
+- "Design a product page for an e-commerce site"
 
-### 2. View and Edit Mockups
+**Important**: The AI only generates mockups when you explicitly ask using keywords like: create, build, make, generate, design, develop. Otherwise, it acts as a normal chatbot.
+
+### 3. View JIRA Dashboard
+
+1. Click the "JIRA Board" button in the dashboard header
+2. View all your JIRA tickets organized by status (To Do, In Progress, QA, Done)
+3. Filter tickets by status
+4. Click on any ticket to see details and open in JIRA
+5. The chatbot has live access to this data - ask it questions!
+
+**Example Questions for Chatbot**:
+- "How many tickets are in progress?"
+- "What tasks are in QA?"
+- "Show me unassigned tickets"
+- "What's the status breakdown?"
+
+### 4. View and Edit Mockups
 
 1. **Preview Tab**: View the rendered HTML mockup in real-time
 2. **HTML Code Tab**: View and copy the HTML source code
@@ -449,46 +515,53 @@ Before starting, verify you have everything:
    - AI edits are automatically saved to the database
    - Manual edits can be saved with the "Save Changes" button
 
-### 3. View Past Projects
+### 5. View Past Projects
 
 1. All generated mockups appear in the "Past Projects" section (right sidebar on dashboard)
-2. Click any project card to view and edit it again
-3. Your edits are persisted in the SQLite database
+2. Two projects per row in a beautiful grid layout
+3. Click any project card to view and edit it again
+4. Your edits are persisted in the SQLite database
+5. Chat interface and Past Projects are in a 60/40 split for optimal viewing
 
-### 4. Refine with AI
+### 6. Refine with AI
 
 1. Click "Refine with AI" button in the header
 2. The AI will generate an improved version of the current mockup
 3. Review and continue editing as needed
 
-### 5. Export for Development
+### 7. Export for Development
 
 1. Once satisfied with the mockup, click "Download HTML"
 2. Share the HTML file with your development team
 3. Developers can use it as a reference for implementation
 
-### 6. GitHub Repository Integration
+### 8. GitHub Repository Integration
 
-1. When generating a mockup, optionally provide a GitHub repository URL
-2. The system will analyze the repository to understand:
-   - Technology stack (from package.json, requirements.txt, etc.)
-   - Existing design patterns and components
-   - Code structure and conventions
-3. The mockup will be enhanced to align with your repository's context
-4. This creates more relevant mockups that match your existing codebase
+1. Ask the chatbot to "fetch readme" to load your repository's tech stack
+2. The system will analyze the repository README to understand:
+   - Technology stack and frameworks
+   - Project structure and conventions
+   - Existing patterns and best practices
+3. The AI will use this context for:
+   - Better mockup suggestions aligned with your stack
+   - More relevant feature recommendations
+   - Context-aware JIRA ticket generation
+4. **Dynamic Loading**: README is only fetched when you explicitly request it, not hardcoded
 
-### 7. Submit to Jira
+### 9. Create JIRA Tickets from Mockups
 
-1. After generating a mockup, click the "Submit" button
-2. The system will:
-   - Compare the mockup with your GitHub repository
-   - Identify required changes and implementation tasks
-   - Create multiple Jira tickets with:
-     - Difficulty scores (1-10)
-     - Priority levels (High, Medium, Low)
-     - Detailed descriptions
-     - Acceptance criteria
-3. View all created tickets with their details and links
+1. After generating a mockup in the chat, click "Create JIRA Tickets"
+2. Or, from the mockup viewer, click "Create JIRA Tickets"
+3. The system will:
+   - Analyze the mockup with AI
+   - Generate 3-5 implementation tickets covering frontend, backend, integration, etc.
+   - Create tickets in your KAN board with:
+     - **Difficulty scores** (1-10 scale)
+     - **Priority levels** (High, Medium, Low)
+     - **Detailed descriptions**
+     - **Acceptance criteria** (AI-generated)
+4. View all created tickets with direct links to JIRA
+5. Monitor progress through the JIRA Dashboard
 
 ## 🛠️ API Endpoints
 
@@ -710,6 +783,35 @@ hackutd_25/
 4. **Developer Handoff**: Provide clear visual references to development teams
 5. **Sprint Planning**: Visualize features before sprint commitment
 6. **Stakeholder Alignment**: Get feedback early in the design process
+7. **JIRA Project Management**: Query ticket status and create implementation tickets directly from mockups
+8. **Context-Aware Development**: Leverage your existing codebase (README) for better mockup suggestions
+
+## 💎 What Makes This Special?
+
+### 🎨 Beautiful UI/UX
+- **Golden-themed glassmorphism design** inspired by premium fintech products
+- **Sponsor branding** (PNC & NVIDIA) elegantly integrated
+- **Responsive layouts** with optimal 60/40 split for chat and projects
+- **Right-aligned user messages** for natural conversation flow
+- **Full markdown support** including syntax-highlighted code blocks
+
+### 🤖 Intelligent AI Integration
+- **Two-step generation**: AI suggests features before creating, preventing over-eager generation
+- **Contextual awareness**: Understands your tech stack from GitHub README
+- **Live JIRA data**: Chatbot can query and answer questions about your project status
+- **Smart ticket creation**: Automatically generates detailed tickets with acceptance criteria
+
+### 🔗 Seamless Integrations
+- **JIRA**: View dashboard, create tickets, track progress
+- **GitHub**: Fetch README for context-aware suggestions
+- **NVIDIA Nemotron**: Powerful AI for natural language understanding
+- **All working together** in a cohesive, polished interface
+
+### 📊 Production-Ready Features
+- **Persistent storage**: SQLite database for all mockups and chat history
+- **Auto-save**: Never lose your work
+- **Error handling**: Robust JSON parsing and API error management
+- **Clean architecture**: Separate concerns with modular components
 
 ## 🚧 Additional Troubleshooting
 
@@ -753,16 +855,21 @@ hackutd_25/
 
 ### ✅ Implemented Features
 
-- [x] Database integration for persistent storage (SQLite)
-- [x] Past projects viewing
-- [x] AI-powered HTML editing
-- [x] GitHub repository integration
-- [x] Context-aware mockup generation
-- [x] Jira integration for ticket creation
-- [x] Smart ticket generation with difficulty and priority
-- [x] MCP server for GitHub-aware mockup generation
-- [x] Mockup vs repository comparison
-- [x] Automated acceptance criteria generation
+- [x] **AI Chatbot with Markdown Support** - Full markdown rendering in chat messages
+- [x] **Two-Step Mockup Generation** - AI suggests features first, then generates
+- [x] **JIRA Dashboard** - Beautiful view of all tickets organized by status
+- [x] **Live JIRA Data for Chatbot** - Query ticket counts, status, assignees in real-time
+- [x] **Dynamic README Loading** - Fetch GitHub README on-demand for context
+- [x] **Smart Ticket Creation** - AI-generated JIRA tickets with acceptance criteria
+- [x] **Database Integration** - Persistent storage with SQLite
+- [x] **Past Projects Grid** - Beautiful 2-column layout for mockup history
+- [x] **AI-Powered HTML Editing** - Natural language HTML modifications
+- [x] **GitHub Repository Integration** - Context-aware mockup generation
+- [x] **Golden-Themed UI** - Modern glassmorphism design with PNC & NVIDIA branding
+- [x] **Responsive Layouts** - 60/40 split for chat and projects
+- [x] **MCP Server** - Model Context Protocol for advanced integrations
+- [x] **Automated Screenshot Generation** - Visual previews for all mockups
+- [x] **Right-Aligned User Messages** - Clean chat UI with proper message alignment
 
 ### 🚧 Future Enhancements
 

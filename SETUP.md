@@ -1,120 +1,157 @@
-# Quick Setup Guide
+# PM Genie - Quick Setup Guide
 
-## 🚀 Fast Start (5 minutes)
+**⚡ Get up and running in 5 minutes!**
 
-### Step 1: Get Your NVIDIA API Key
+## Prerequisites Checklist
+- [ ] Python 3.8+ (`python --version`)
+- [ ] Node.js 16+ (`node --version`)
+- [ ] NVIDIA API Key from https://build.nvidia.com/
 
-1. Go to https://build.nvidia.com/
-2. Sign in or create an account
-3. Navigate to the API Catalog
-4. Find "Nemotron-4-340B-Instruct" 
-5. Click "Get API Key"
-6. Copy your API key
+## 🚀 Quick Setup (5 Steps)
 
-### Step 2: Setup Backend
-
-Open a terminal and run:
-
+### 1. Clone the Repository
 ```bash
+git clone <repository-url>
+cd hackutd_25
+```
+
+### 2. Backend Setup
+```bash
+# Navigate to backend
 cd backend
 
 # Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv venv
+
+# Activate virtual environment
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+# Windows CMD:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Create .env file
-cat > .env << EOL
-NVIDIA_API_KEY=YOUR_API_KEY_HERE
+# Create a file named .env in the backend directory with:
+```
+
+**backend/.env file contents:**
+```env
+NVIDIA_API_KEY=your_nvidia_api_key_here
 NVIDIA_API_URL=https://integrate.api.nvidia.com/v1/chat/completions
-FLASK_ENV=development
-FLASK_DEBUG=True
-EOL
 
-# Replace YOUR_API_KEY_HERE with your actual API key
-# You can edit the .env file with: nano .env or vim .env
+# Optional: GitHub Integration
+GITHUB_TOKEN=your_github_token_here
+GITHUB_REPO_URL=https://github.com/your-username/your-repo
 
-# Start backend
+# Optional: JIRA Integration
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your_jira_api_token_here
+```
+
+**⚠️ Important:**
+- NO quotes around values
+- NO spaces around `=`
+- File must be named exactly `.env`
+
+```bash
+# Start backend server
 python app.py
 ```
 
-Backend should now be running on http://localhost:5000
+✅ **Verify**: Should see "Running on http://127.0.0.1:5001"
 
-### Step 3: Setup Frontend
-
-Open a **new terminal** (keep backend running) and run:
-
+### 3. Frontend Setup (New Terminal)
 ```bash
+# Open NEW terminal, navigate to frontend
 cd frontend
 
 # Install dependencies
 npm install
 
-# Start frontend
+# Start development server
 npm start
 ```
 
-Frontend should now be running on http://localhost:3000 and automatically open in your browser!
+✅ **Verify**: Browser opens to http://localhost:3000
 
-## ✅ Verify Installation
+## ✅ You're Done!
 
-1. Open http://localhost:3000 in your browser
-2. You should see the PM Mockup Generator dashboard
-3. Enter a test prompt: "Create a simple landing page with a header and call-to-action button"
-4. Click "Generate Mockup"
-5. Wait 15-30 seconds for the AI to generate your mockup
+Both servers should be running:
+- **Backend**: http://127.0.0.1:5001 
+- **Frontend**: http://localhost:3000
+
+## 🎮 Quick Feature Tour
+
+### 1. Chat with AI
+- Ask questions: "What are good features for a login page?"
+- Get JIRA info: "How many tickets are in progress?"
+- Load context: "fetch readme"
+
+### 2. Generate Mockup
+1. Say: "Create a dashboard for a banking app"
+2. Review AI suggestions
+3. Confirm: "yes, proceed"
+4. Wait ~20 seconds
+5. View your mockup!
+
+### 3. View JIRA Board
+- Click "JIRA Board" button
+- See all tickets organized by status
+- Filter and search tickets
+
+### 4. Create JIRA Tickets
+- After generating mockup, click "Create JIRA Tickets"
+- AI analyzes mockup and creates detailed tickets
+- View tickets with difficulty scores and priorities
 
 ## 🐛 Common Issues
 
-### "NVIDIA_API_KEY not found"
-Make sure you:
-1. Created the `.env` file in the `backend` directory
-2. Added your actual API key (not `YOUR_API_KEY_HERE`)
-3. Restarted the Flask server after creating `.env`
+**Backend won't start?**
+- Check virtual environment is activated: `(venv)` in prompt
+- Verify .env file exists in backend directory
+- Test: Visit http://127.0.0.1:5001/api/health
 
-### "Module not found" errors
-Run these commands in the backend directory:
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
+**Frontend won't connect?**
+- Make sure backend is running on port 5001
+- Check browser console (F12) for errors
+- Hard refresh: Ctrl+Shift+R
 
-### Frontend won't start
-Try:
-```bash
-rm -rf node_modules package-lock.json
-npm install
-npm start
-```
+**API Key issues?**
+- Verify no quotes in .env file
+- Check key is valid at https://build.nvidia.com/
+- Restart backend after changing .env
 
-### Port already in use
-If port 5000 or 3000 is busy, you can change ports:
-- Backend: Edit `app.run(port=5001)` in `app.py`
-- Frontend: Set `PORT=3001` before running `npm start`
+## 🔗 More Help
 
-## 📚 Next Steps
+- Full documentation: See [README.md](README.md)
+- GitHub token setup: See `backend/GITHUB_TOKEN_SETUP.md`
+- JIRA setup: See `backend/test_jira.py`
 
-- Read the full README.md for detailed documentation
-- Try the example prompts in the dashboard
-- Experiment with different mockup descriptions
-- Share with your team for feedback!
+## 📋 Environment Variables Reference
 
-## 💡 Tips for Best Results
+### Required
+- `NVIDIA_API_KEY` - Your NVIDIA API key
 
-1. **Be specific** in your prompts - mention colors, layout, features
-2. **Start simple** - test with basic layouts first
-3. **Iterate** - use the feedback system to refine mockups
-4. **Export early** - download HTML to review offline
+### Optional
+- `GITHUB_TOKEN` - For private repos or higher rate limits
+- `GITHUB_REPO_URL` - Your repository URL for context
+- `JIRA_BASE_URL` - Your Atlassian instance URL
+- `JIRA_EMAIL` - Your Atlassian account email
+- `JIRA_API_TOKEN` - Your JIRA API token
 
-## 🎯 Example Workflow
+## 🎯 Next Steps
 
-1. Generate initial mockup with prompt
-2. Preview in the viewer
-3. Collect feedback from stakeholders
-4. Click "Refine with AI" to improve based on feedback
-5. Download final HTML to share with developers
+1. Generate your first mockup
+2. Try the JIRA integration
+3. Load your GitHub README for context-aware suggestions
+4. Explore the markdown chat features
+5. Create implementation tickets from mockups
 
-Happy mockup generating! 🎨✨
+---
 
+**Need more details?** Check out the [full README](README.md) for comprehensive documentation!
