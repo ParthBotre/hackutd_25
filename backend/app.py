@@ -372,8 +372,7 @@ def generate_mockup():
     data = request.json
     prompt = data.get('prompt', '')
     project_name = data.get('project_name', 'Untitled Project')
-    #github_repo_url = data.get('github_repo_url', '')  # Optional GitHub repo URL
-    github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
+    github_repo_url = data.get('github_repo_url', '') or os.environ.get('GITHUB_REPO_URL', '')
     
     if not prompt:
         return jsonify({'error': 'Prompt is required'}), 400
@@ -711,10 +710,6 @@ def submit_mockup_to_jira(mockup_id):
             request_data = {}
         
         github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
-        
-        if not github_repo_url:
-            # Fallback: Use the hardcoded repo URL if available
-            github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
         
         # Re-analyze repository to get current state
         from repo_mockup_generator import parse_github_url
