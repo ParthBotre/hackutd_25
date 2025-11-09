@@ -200,64 +200,7 @@ def serialize_mockup_row(row, include_html=False):
         mockup['html_content'] = row['html_content']
     return mockup
 
-def call_nvidia_nemotron(prompt, system_message):
-    """Call NVIDIA Nemotron API"""
-    if not NVIDIA_API_KEY or NVIDIA_API_KEY == '':
-        raise Exception("NVIDIA_API_KEY is not set. Please create a .env file in the backend directory with your API key.")
-    
-    # Clean the API key (remove any quotes or whitespace)
-    api_key = NVIDIA_API_KEY.strip().strip('"').strip("'")
-    
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    payload = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
-        'messages': [
-            {'role': 'system', 'content': system_message},
-            {'role': 'user', 'content': prompt}
-        ],
-        'temperature': 0.6,
-        'top_p': 0.95,
-        'max_tokens': 16000,
-        'frequency_penalty': 0,
-        'presence_penalty': 0,
-        'stream': False
-    }
-    
-    try:
-        # Debug logging (don't log the full API key)
-        print(f"Making API request to: {NVIDIA_API_URL}")
-        print(f"API Key present: {bool(api_key)}, length: {len(api_key)}")
-        print(f"Model: {payload['model']}")
-        
-        response = requests.post(NVIDIA_API_URL, headers=headers, json=payload, timeout=120)
-        response.raise_for_status()
-        result = response.json()
-        if 'choices' not in result or len(result['choices']) == 0:
-            raise Exception("No choices in API response")
-        return result['choices'][0]['message']['content']
-    except requests.exceptions.RequestException as e:
-        print(f"Error calling NVIDIA API (RequestException): {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            status_code = e.response.status_code
-            print(f"Response status: {status_code}")
-            print(f"Response body: {e.response.text}")
-            
-            if status_code == 401:
-                raise Exception("Invalid API key. Please check your NVIDIA_API_KEY in the .env file. Get your API key from https://build.nvidia.com/")
-            elif status_code == 429:
-                raise Exception("Rate limit exceeded. Please wait a moment and try again.")
-            elif status_code == 400:
-                raise Exception(f"Invalid request: {e.response.text}")
-            else:
-                raise Exception(f"API request failed with status {status_code}: {e.response.text}")
-        raise Exception(f"Failed to call NVIDIA API: {str(e)}")
-    except Exception as e:
-        print(f"Error calling NVIDIA API: {str(e)}")
-        raise Exception(f"Failed to process AI request: {str(e)}")
+from nemotron_client import call_nvidia_nemotron
 
 def generate_mock_html(prompt):
     """Generate a simple HTML mockup (fallback for development)"""
@@ -429,12 +372,30 @@ def generate_mockup():
     data = request.json
     prompt = data.get('prompt', '')
     project_name = data.get('project_name', 'Untitled Project')
+    #github_repo_url = data.get('github_repo_url', '')  # Optional GitHub repo URL
+    github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
     
     if not prompt:
         return jsonify({'error': 'Prompt is required'}), 400
     
-    # Create system message for mockup generation
-    system_message = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
+    # If GitHub repo URL is provided, use repo-aware generator to enhance with repo context
+    if github_repo_url:
+        try:
+            from repo_mockup_generator import generate_mockup_from_repo
+            print(f"Using GitHub repository context: {github_repo_url}")
+            html_content = generate_mockup_from_repo(github_repo_url, prompt, None)
+        except Exception as e:
+            print(f"Error using GitHub repo context: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print("Falling back to standard mockup generation")
+            # Fall back to standard generation
+            github_repo_url = None
+    
+    # Standard mockup generation (if no GitHub repo or if GitHub integration failed)
+    if not github_repo_url:
+        # Create system message for mockup generation
+        system_message = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
 
 Your mockups should:
 1. Be fully self-contained with inline CSS (no external dependencies)
@@ -447,9 +408,9 @@ Your mockups should:
 8. Use modern CSS features (flexbox, grid, gradients, shadows, etc.)
 
 Return ONLY the complete HTML code, no explanations or markdown formatting."""
-    
-    # Call NVIDIA Nemotron to generate HTML
-    html_content = call_nvidia_nemotron(prompt, system_message)
+        
+        # Call NVIDIA Nemotron to generate HTML
+        html_content = call_nvidia_nemotron(prompt, system_message)
     
     # Clean up the response (remove thinking tags and markdown code blocks)
     # Remove <think>...</think> sections that the model might include
@@ -488,7 +449,7 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
         print(f"Error generating screenshot: {str(e)}")
         # Continue without screenshot
     
-    # Save mockup metadata
+    # Save mockup metadata (include GitHub repo URL if used)
     mockup_data = {
         'id': mockup_id,
         'project_name': project_name,
@@ -496,7 +457,8 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
         'html_filename': html_filename,
         'screenshot_filename': screenshot_filename,
         'created_at': created_at,
-        'feedback': []
+        'feedback': [],
+        'github_repo_url': github_repo_url if github_repo_url else None
     }
 
     save_mockup_to_db(mockup_data, html_content)
@@ -504,7 +466,8 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
     return jsonify({
         'success': True,
         'mockup': mockup_data,
-        'html_content': html_content
+        'html_content': html_content,
+        'used_github_context': bool(github_repo_url)
     })
 
 @app.route('/api/mockups/<mockup_id>/html', methods=['GET'])
