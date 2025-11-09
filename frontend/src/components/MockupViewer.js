@@ -11,7 +11,8 @@ import {
   Edit,
   Save,
   Bot,
-  CheckCircle
+  CheckCircle,
+  MessageSquare
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
 import './MockupViewer.css';
@@ -25,6 +26,8 @@ function MockupViewer({ mockup, onBack }) {
   const [saving, setSaving] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [simulatingFeedback, setSimulatingFeedback] = useState(false);
+  const [simulatedFeedback, setSimulatedFeedback] = useState([]);
 
   useEffect(() => {
     setHtmlContent(mockup.html_content);
@@ -48,6 +51,28 @@ function MockupViewer({ mockup, onBack }) {
       alert('Failed to refine mockup. Please try again.');
     } finally {
       setRefining(false);
+    }
+  };
+
+  const handleSimulateFeedback = async () => {
+    setSimulatingFeedback(true);
+    setSimulatedFeedback([]);
+
+    try {
+      const response = await axios.post(API_ENDPOINTS.SIMULATE_FEEDBACK, {
+        html_content: htmlContent
+      });
+
+      if (response.data.success && response.data.feedback) {
+        setSimulatedFeedback(response.data.feedback);
+      } else {
+        throw new Error(response.data.error || 'Failed to simulate feedback');
+      }
+    } catch (err) {
+      console.error('Error simulating feedback:', err);
+      alert('Failed to simulate feedback. Please try again.');
+    } finally {
+      setSimulatingFeedback(false);
     }
   };
 
@@ -221,6 +246,14 @@ function MockupViewer({ mockup, onBack }) {
             <RefreshCw className={refining ? 'spinning' : ''} />
             {refining ? 'Refining...' : 'Refine with AI'}
           </button>
+          <button 
+            className="action-button simulate-feedback-button" 
+            onClick={handleSimulateFeedback}
+            disabled={simulatingFeedback}
+          >
+            <MessageSquare className={simulatingFeedback ? 'spinning' : ''} />
+            {simulatingFeedback ? 'Analyzing...' : 'Simulate Feedback'}
+          </button>
           <button className="action-button download-button" onClick={handleDownloadHTML}>
             <Download />
             Download HTML
@@ -305,11 +338,33 @@ function MockupViewer({ mockup, onBack }) {
           </div>
         </div>
 
-        <div className="chatbot-panel">
-          <div className="chatbot-header">
-            <Bot className="bot-icon" />
-            <h3>AI Editor Assistant</h3>
-          </div>
+        <div className="right-panel-container">
+          {simulatedFeedback.length > 0 && (
+            <div className="feedback-panel">
+              <div className="feedback-header">
+                <MessageSquare className="panel-icon" />
+                <h2>Simulated Feedback</h2>
+              </div>
+              <div className="feedback-list">
+                {simulatedFeedback.map((item, index) => (
+                  <div key={index} className="feedback-item">
+                    <div className="feedback-item-header">
+                      <span className="feedback-number">{index + 1}</span>
+                      <span className="feedback-category">{item.category || 'general'}</span>
+                    </div>
+                    <h4 className="feedback-title">{item.title}</h4>
+                    <p className="feedback-text">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <div className="chatbot-panel">
+            <div className="chatbot-header">
+              <Bot className="bot-icon" />
+              <h3>AI Editor Assistant</h3>
+            </div>
           <div className="chat-messages">
             {chatHistory.length === 0 ? (
               <div className="chat-empty">
@@ -367,6 +422,7 @@ function MockupViewer({ mockup, onBack }) {
               <Send size={18} />
             </button>
           </form>
+          </div>
         </div>
       </div>
     </div>

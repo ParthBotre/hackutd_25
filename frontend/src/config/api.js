@@ -18,6 +18,7 @@ export const API_ENDPOINTS = {
   ADD_FEEDBACK: (id) => `${API_BASE_URL}/api/mockups/${id}/feedback`,
   EDIT_HTML: `${API_BASE_URL}/api/edit-html`,
   REFINE_MOCKUP: `${API_BASE_URL}/api/refine-mockup`,
+  SIMULATE_FEEDBACK: `${API_BASE_URL}/api/simulate-feedback`,
   SUBMIT_MOCKUP: (id) => `${API_BASE_URL}/api/mockups/${id}/submit`,
   JIRA_TEST: `${API_BASE_URL}/api/jira/test`,
   JIRA_TICKETS: `${API_BASE_URL}/api/jira/tickets`,
