@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { Loader, Sparkles, Wand2 } from 'lucide-react';
-import React, { useState } from 'react';
+import { Loader, Sparkles, Wand2, Clock, FolderOpen } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 
 function Dashboard({ onMockupGenerated }) {
@@ -8,6 +8,36 @@ function Dashboard({ onMockupGenerated }) {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pastProjects, setPastProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  useEffect(() => {
+    loadPastProjects();
+  }, []);
+
+  const loadPastProjects = async () => {
+    try {
+      setLoadingProjects(true);
+      const response = await axios.get('/api/mockups');
+      setPastProjects(response.data.mockups || []);
+    } catch (err) {
+      console.error('Error loading past projects:', err);
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
+
+  const handleViewProject = async (mockupId) => {
+    try {
+      const response = await axios.get(`/api/mockups/${mockupId}`);
+      if (response.data.mockup) {
+        onMockupGenerated(response.data.mockup);
+      }
+    } catch (err) {
+      console.error('Error loading project:', err);
+      alert('Failed to load project. Please try again.');
+    }
+  };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -33,6 +63,8 @@ function Dashboard({ onMockupGenerated }) {
           html_content: response.data.html_content
         };
         onMockupGenerated(mockupWithHtml);
+        // Reload past projects to include the new one
+        loadPastProjects();
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to generate mockup. Please try again.');
@@ -146,6 +178,51 @@ function Dashboard({ onMockupGenerated }) {
         </div>
 
         <div className="info-section">
+          <div className="info-card past-projects-card">
+            <div className="section-header">
+              <FolderOpen className="section-icon" />
+              <h3>Past Projects</h3>
+            </div>
+            {loadingProjects ? (
+              <div className="loading-projects">
+                <Loader className="spinning" />
+                <p>Loading projects...</p>
+              </div>
+            ) : pastProjects.length === 0 ? (
+              <div className="empty-projects">
+                <p>No projects yet. Generate your first mockup to get started!</p>
+              </div>
+            ) : (
+              <div className="projects-list">
+                {pastProjects.map((project) => {
+                  const date = new Date(project.created_at);
+                  const formattedDate = date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  return (
+                    <div
+                      key={project.id}
+                      className="project-card"
+                      onClick={() => handleViewProject(project.id)}
+                    >
+                      <div className="project-header">
+                        <h4>{project.project_name}</h4>
+                        <div className="project-date">
+                          <Clock size={14} />
+                          <span>{formattedDate}</span>
+                        </div>
+                      </div>
+                      <p className="project-prompt">{project.prompt.substring(0, 80)}...</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div className="info-card">
             <h3>🎯 How It Works</h3>
             <ol>

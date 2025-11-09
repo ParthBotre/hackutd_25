@@ -3,12 +3,10 @@ from flask_cors import CORS
 import os
 import requests
 from datetime import datetime
-import json
-import base64
-from io import BytesIO
 import html2image
 from pathlib import Path
 from dotenv import load_dotenv
+import sqlite3
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,25 +18,177 @@ CORS(app)
 NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY', '')
 NVIDIA_API_URL = os.environ.get('NVIDIA_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions')
 
-# Storage for mockups and feedback
+# Storage directories and database
 MOCKUPS_DIR = Path('mockups')
-MOCKUPS_DIR.mkdir(exist_ok=True)
-FEEDBACK_FILE = 'feedback.json'
+MOCKUPS_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = Path('data')
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / 'mockups.db'
 
 # Initialize html2image
 hti = html2image.Html2Image(output_path=str(MOCKUPS_DIR))
 
-def load_feedback():
-    """Load feedback from JSON file"""
-    if os.path.exists(FEEDBACK_FILE):
-        with open(FEEDBACK_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def save_feedback(feedback_data):
-    """Save feedback to JSON file"""
-    with open(FEEDBACK_FILE, 'w') as f:
-        json.dump(feedback_data, f, indent=2)
+def init_db():
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mockups (
+                    id TEXT PRIMARY KEY,
+                    project_name TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    html_content TEXT NOT NULL,
+                    html_filename TEXT NOT NULL,
+                    screenshot_filename TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mockup_id TEXT NOT NULL,
+                    author TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY(mockup_id) REFERENCES mockups(id) ON DELETE CASCADE
+                )
+                """
+            )
+    finally:
+        conn.close()
+
+def save_mockup_to_db(mockup_data, html_content):
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO mockups (
+                    id, project_name, prompt, html_content,
+                    html_filename, screenshot_filename, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mockup_data['id'],
+                    mockup_data['project_name'],
+                    mockup_data['prompt'],
+                    html_content,
+                    mockup_data['html_filename'],
+                    mockup_data['screenshot_filename'],
+                    mockup_data['created_at']
+                )
+            )
+    finally:
+        conn.close()
+
+def get_mockup_from_db(mockup_id):
+    conn = get_db_connection()
+    try:
+        mockup = conn.execute(
+            "SELECT * FROM mockups WHERE id = ?",
+            (mockup_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return mockup
+
+def list_mockups_from_db(limit=None, include_html=False):
+    conn = get_db_connection()
+    try:
+        query = "SELECT * FROM mockups ORDER BY datetime(created_at) DESC"
+        if limit is not None:
+            query += " LIMIT ?"
+            rows = conn.execute(query, (limit,)).fetchall()
+        else:
+            rows = conn.execute(query).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            'id': row['id'],
+            'project_name': row['project_name'],
+            'prompt': row['prompt'],
+            'created_at': row['created_at'],
+            'html_filename': row['html_filename'],
+            'screenshot_filename': row['screenshot_filename'],
+            **({'html_content': row['html_content']} if include_html else {})
+        }
+        for row in rows
+    ]
+
+def get_feedback_from_db(mockup_id):
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, author, text, timestamp
+            FROM feedback
+            WHERE mockup_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (mockup_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            'id': row['id'],
+            'author': row['author'],
+            'text': row['text'],
+            'timestamp': row['timestamp']
+        }
+        for row in rows
+    ]
+
+def add_feedback_to_db(mockup_id, author, feedback_text):
+    conn = get_db_connection()
+    timestamp = datetime.now().isoformat()
+    try:
+        with conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO feedback (mockup_id, author, text, timestamp)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    mockup_id,
+                    author,
+                    feedback_text,
+                    timestamp
+                )
+            )
+            feedback_id = cursor.lastrowid
+    finally:
+        conn.close()
+    return {
+        'id': feedback_id,
+        'author': author,
+        'text': feedback_text,
+        'timestamp': timestamp
+    }
+
+init_db()
+
+def serialize_mockup_row(row, include_html=False):
+    mockup = {
+        'id': row['id'],
+        'project_name': row['project_name'],
+        'prompt': row['prompt'],
+        'created_at': row['created_at'],
+        'html_filename': row['html_filename'],
+        'screenshot_filename': row['screenshot_filename']
+    }
+    if include_html:
+        mockup['html_content'] = row['html_content']
+    return mockup
 
 def call_nvidia_nemotron(prompt, system_message):
     """Call NVIDIA Nemotron API"""
@@ -191,6 +341,36 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'PM Mockup Generator API is running'})
 
+@app.route('/api/mockups', methods=['GET'])
+def list_mockups():
+    """List stored mockups"""
+    limit_param = request.args.get('limit')
+    include_html = request.args.get('include_html', 'false').lower() == 'true'
+
+    if limit_param is not None:
+        try:
+            limit = int(limit_param)
+        except ValueError:
+            return jsonify({'error': 'Limit must be an integer'}), 400
+        if limit <= 0:
+            return jsonify({'error': 'Limit must be positive'}), 400
+    else:
+        limit = None
+
+    mockups = list_mockups_from_db(limit=limit, include_html=include_html)
+    return jsonify({'mockups': mockups})
+
+@app.route('/api/mockups/<mockup_id>', methods=['GET'])
+def get_mockup(mockup_id):
+    """Retrieve metadata (and optionally HTML) for a single mockup"""
+    include_html = request.args.get('include_html', 'true').lower() == 'true'
+    row = get_mockup_from_db(mockup_id)
+    if not row:
+        return jsonify({'error': 'Mockup not found'}), 404
+    mockup = serialize_mockup_row(row, include_html=include_html)
+    mockup['feedback'] = get_feedback_from_db(mockup_id)
+    return jsonify({'mockup': mockup})
+
 @app.route('/api/generate-mockup', methods=['POST'])
 def generate_mockup():
     """Generate HTML mockup from prompt using NVIDIA Nemotron"""
@@ -235,12 +415,13 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
         html_content = html_content.split('```')[1].split('```')[0].strip()
     
     # Generate unique ID for this mockup
-    mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S%f')
+    created_at = datetime.now().isoformat()
     
     # Save HTML file
     html_filename = f'mockup_{mockup_id}.html'
     html_path = MOCKUPS_DIR / html_filename
-    with open(html_path, 'w') as f:
+    with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
     # Generate screenshot
@@ -262,9 +443,11 @@ Return ONLY the complete HTML code, no explanations or markdown formatting."""
         'prompt': prompt,
         'html_filename': html_filename,
         'screenshot_filename': screenshot_filename,
-        'created_at': datetime.now().isoformat(),
+        'created_at': created_at,
         'feedback': []
     }
+
+    save_mockup_to_db(mockup_data, html_content)
     
     return jsonify({
         'success': True,
@@ -298,30 +481,19 @@ def add_feedback(mockup_id):
     if not feedback_text:
         return jsonify({'error': 'Feedback text is required'}), 400
     
-    # Load existing feedback
-    all_feedback = load_feedback()
+    if not get_mockup_from_db(mockup_id):
+        return jsonify({'error': 'Mockup not found'}), 404
     
-    if mockup_id not in all_feedback:
-        all_feedback[mockup_id] = []
-    
-    # Add new feedback
-    feedback_entry = {
-        'id': len(all_feedback[mockup_id]) + 1,
-        'author': author,
-        'text': feedback_text,
-        'timestamp': datetime.now().isoformat()
-    }
-    
-    all_feedback[mockup_id].append(feedback_entry)
-    save_feedback(all_feedback)
+    feedback_entry = add_feedback_to_db(mockup_id, author, feedback_text)
     
     return jsonify({'success': True, 'feedback': feedback_entry})
 
 @app.route('/api/mockups/<mockup_id>/feedback', methods=['GET'])
 def get_feedback(mockup_id):
     """Get all feedback for a mockup"""
-    all_feedback = load_feedback()
-    mockup_feedback = all_feedback.get(mockup_id, [])
+    if not get_mockup_from_db(mockup_id):
+        return jsonify({'error': 'Mockup not found'}), 404
+    mockup_feedback = get_feedback_from_db(mockup_id)
     return jsonify({'feedback': mockup_feedback})
 
 @app.route('/api/refine-mockup', methods=['POST'])
@@ -366,12 +538,13 @@ Return ONLY the complete HTML code, no explanations."""
         refined_html = refined_html.split('```')[1].split('```')[0].strip()
     
     # Generate new mockup ID
-    mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S%f')
+    created_at = datetime.now().isoformat()
     
     # Save refined HTML
     html_filename = f'mockup_{mockup_id}.html'
     html_path = MOCKUPS_DIR / html_filename
-    with open(html_path, 'w') as f:
+    with open(html_path, 'w', encoding='utf-8') as f:
         f.write(refined_html)
     
     # Generate screenshot
@@ -385,6 +558,18 @@ Return ONLY the complete HTML code, no explanations."""
     except Exception as e:
         print(f"Error generating screenshot: {str(e)}")
     
+    refined_mockup_data = {
+        'id': mockup_id,
+        'project_name': 'Refined Mockup',
+        'prompt': refinement_prompt,
+        'html_filename': html_filename,
+        'screenshot_filename': screenshot_filename,
+        'created_at': created_at,
+        'feedback': []
+    }
+
+    save_mockup_to_db(refined_mockup_data, refined_html)
+
     return jsonify({
         'success': True,
         'mockup_id': mockup_id,

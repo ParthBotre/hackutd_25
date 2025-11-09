@@ -297,3 +297,126 @@
   font-weight: 700;
 }
 
+.past-projects-card {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.past-projects-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.past-projects-card::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.past-projects-card::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 10px;
+}
+
+.past-projects-card::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.section-icon {
+  width: 24px;
+  height: 24px;
+  color: #667eea;
+}
+
+.past-projects-card h3 {
+  color: #2d3748;
+  margin: 0;
+  font-size: 1.3em;
+}
+
+.loading-projects,
+.empty-projects {
+  text-align: center;
+  padding: 30px 20px;
+  color: #718096;
+}
+
+.loading-projects {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.loading-projects .spinning {
+  width: 32px;
+  height: 32px;
+  color: #667eea;
+}
+
+.projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-card {
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.project-card:hover {
+  border-color: #667eea;
+  background: white;
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  gap: 10px;
+}
+
+.project-header h4 {
+  color: #1a202c;
+  font-size: 1em;
+  margin: 0;
+  font-weight: 600;
+  flex: 1;
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+.project-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #718096;
+  font-size: 0.75em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.project-prompt {
+  color: #4a5568;
+  font-size: 0.85em;
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
