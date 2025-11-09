@@ -125,6 +125,58 @@ def validate_jira_credentials() -> bool:
         return False
 
 
+def get_jira_data_for_chatbot(board_id: int = 1, project_key: str = "KAN") -> dict:
+    """
+    Get simplified JIRA data for chatbot context.
+    Returns raw ticket data in a simple format.
+    
+    Args:
+        board_id: The ID of the board (default: 1 for the KAN board)
+        project_key: Project key (default: "KAN")
+    
+    Returns:
+        Dictionary with project summary and tickets
+    """
+    try:
+        # Get all issues from the board
+        issues = get_board_issues(board_id=board_id)
+        
+        # Simplify the data
+        tickets = []
+        for issue in issues:
+            ticket = {
+                "key": issue.get("key", ""),
+                "summary": issue["fields"].get("summary", ""),
+                "status": issue["fields"].get("status", {}).get("name", "Unknown"),
+                "type": issue["fields"].get("issuetype", {}).get("name", "Task"),
+                "priority": issue["fields"].get("priority", {}).get("name", "Medium") if issue["fields"].get("priority") else "Medium",
+                "assignee": issue["fields"].get("assignee", {}).get("displayName", "Unassigned") if issue["fields"].get("assignee") else "Unassigned",
+            }
+            tickets.append(ticket)
+        
+        # Group by status
+        status_counts = {}
+        for ticket in tickets:
+            status = ticket["status"]
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        return {
+            "project_key": project_key,
+            "total_tickets": len(tickets),
+            "status_counts": status_counts,
+            "tickets": tickets
+        }
+    except Exception as e:
+        print(f"Error fetching JIRA data for chatbot: {str(e)}")
+        return {
+            "project_key": project_key,
+            "total_tickets": 0,
+            "status_counts": {},
+            "tickets": [],
+            "error": str(e)
+        }
+
+
 def create_enhanced_jira_ticket(
     title: str,
     description: str,

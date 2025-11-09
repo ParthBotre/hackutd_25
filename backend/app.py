@@ -412,7 +412,47 @@ When the user asks:
 
 DO NOT ask them to paste the README. You already have it!"""
         
-        system_message = f"""You are a helpful Product Manager assistant chatbot.{tech_stack_context}{readme_instruction}
+        # Fetch JIRA data for chatbot context
+        jira_context = ""
+        try:
+            from jira_integration import get_jira_data_for_chatbot
+            jira_data = get_jira_data_for_chatbot(board_id=1, project_key="KAN")
+            
+            if jira_data and jira_data.get('tickets'):
+                # Format JIRA data for the chatbot
+                jira_context = f"""
+
+========================================
+JIRA PROJECT DATA (LIVE ACCESS)
+========================================
+
+Project: {jira_data['project_key']}
+Total Tickets: {jira_data['total_tickets']}
+
+Status Breakdown:
+{json.dumps(jira_data['status_counts'], indent=2)}
+
+Current Tickets:
+"""
+                # Add ticket details
+                for ticket in jira_data['tickets'][:20]:  # Limit to 20 most recent
+                    jira_context += f"\n- [{ticket['key']}] {ticket['summary']}"
+                    jira_context += f"\n  Status: {ticket['status']} | Assignee: {ticket['assignee']} | Priority: {ticket['priority']}"
+                
+                jira_context += """
+
+========================================
+
+You have access to the current JIRA board data. You can:
+- Answer questions about ticket counts and status
+- Tell users what tickets are in progress, done, or to do
+- Provide insights on project status
+- Reference existing tickets when creating new ones
+"""
+        except Exception as e:
+            print(f"[DEBUG] Could not load JIRA data: {str(e)}")
+        
+        system_message = f"""You are a helpful Product Manager assistant chatbot.{tech_stack_context}{jira_context}{readme_instruction}
 
 You can have normal conversations about product management, features, ideas, best practices, etc.
 
@@ -1412,7 +1452,11 @@ For each ticket, provide:
 
 Format as JSON array of tickets."""
 
-        system_message = """You are a technical project manager creating JIRA tickets. Output ONLY valid JSON array format:
+        system_message = """You are a technical project manager creating JIRA tickets. 
+
+CRITICAL: Return ONLY a valid JSON array. No markdown, no explanations, no additional text. Just the JSON array.
+
+Example format:
 [
   {
     "title": "Implement User Login Component",
@@ -1421,7 +1465,14 @@ Format as JSON array of tickets."""
     "priority": 1,
     "difficulty": 5
   }
-]"""
+]
+
+Rules:
+- Use double quotes for all strings
+- No trailing commas
+- All fields are required: title, description, acceptance_criteria (array), priority (number), difficulty (number)
+- Priority: 1=High, 2=Medium, 3=Low
+- Difficulty: 1-10 scale"""
 
         print("Analyzing mockup with AI to generate tickets...")
         ai_response = call_nvidia_nemotron(analysis_prompt, system_message, [])
@@ -1431,19 +1482,47 @@ Format as JSON array of tickets."""
         import re
         
         # Clean up response - remove markdown code blocks if present
-        cleaned_response = ai_response
+        cleaned_response = ai_response.strip()
         if '```json' in cleaned_response:
             cleaned_response = cleaned_response.split('```json')[1].split('```')[0].strip()
         elif '```' in cleaned_response:
             cleaned_response = cleaned_response.split('```')[1].split('```')[0].strip()
         
         # Try to extract JSON from response
-        json_match = re.search(r'\[.*\]', cleaned_response, re.DOTALL)
-        if not json_match:
+        print(f"[DEBUG] Cleaned AI response length: {len(cleaned_response)} chars")
+        print(f"[DEBUG] First 300 chars: {cleaned_response[:300]}")
+        
+        # Find the JSON array - look for opening [ and closing ]
+        start_idx = cleaned_response.find('[')
+        if start_idx == -1:
+            print(f"[ERROR] No JSON array found in AI response: {ai_response}")
             raise ValueError(f"AI did not return valid JSON format. Response: {ai_response[:200]}...")
         
-        tickets_data = json.loads(json_match.group())
-        print(f"Generated {len(tickets_data)} tickets from AI analysis")
+        # Find the matching closing bracket
+        bracket_count = 0
+        end_idx = -1
+        for i in range(start_idx, len(cleaned_response)):
+            if cleaned_response[i] == '[':
+                bracket_count += 1
+            elif cleaned_response[i] == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    end_idx = i + 1
+                    break
+        
+        if end_idx == -1:
+            raise ValueError("Could not find matching closing bracket in JSON")
+        
+        json_str = cleaned_response[start_idx:end_idx]
+        print(f"[DEBUG] Extracted JSON length: {len(json_str)} chars")
+        
+        try:
+            tickets_data = json.loads(json_str)
+            print(f"✓ Generated {len(tickets_data)} tickets from AI analysis")
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] JSON parse error: {str(e)}")
+            print(f"[ERROR] Attempted to parse: {json_str[:500]}")
+            raise ValueError(f"Invalid JSON in AI response: {str(e)}")
         
         # Create tickets in JIRA
         results = []
