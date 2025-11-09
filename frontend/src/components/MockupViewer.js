@@ -148,7 +148,31 @@ function MockupViewer({ mockup, onBack }) {
       const response = await axios.post(API_ENDPOINTS.SUBMIT_MOCKUP(mockup.id));
       
       if (response.data.success) {
-        alert(`Mockup submitted to Jira successfully!\n\nIssue Key: ${response.data.issue_key}\nIssue URL: ${response.data.issue_url}`);
+        const tickets = response.data.tickets || [];
+        const successfulTickets = tickets.filter(t => t.success);
+        const failedTickets = tickets.filter(t => !t.success);
+        
+        let message = `Successfully created ${successfulTickets.length} ticket(s) in Jira!\n\n`;
+        
+        if (successfulTickets.length > 0) {
+          message += 'Created Tickets:\n';
+          successfulTickets.forEach((ticket, idx) => {
+            message += `\n${idx + 1}. ${ticket.title}\n`;
+            message += `   Issue: ${ticket.issue_key}\n`;
+            message += `   Priority: ${ticket.priority === 1 ? 'High' : ticket.priority === 2 ? 'Medium' : 'Low'}\n`;
+            message += `   Difficulty: ${ticket.difficulty}/10\n`;
+            message += `   URL: ${ticket.issue_url}\n`;
+          });
+        }
+        
+        if (failedTickets.length > 0) {
+          message += `\n\nFailed to create ${failedTickets.length} ticket(s):\n`;
+          failedTickets.forEach((ticket, idx) => {
+            message += `\n${idx + 1}. ${ticket.title}: ${ticket.error || 'Unknown error'}\n`;
+          });
+        }
+        
+        alert(message);
       } else {
         throw new Error(response.data.error || 'Failed to submit mockup');
       }

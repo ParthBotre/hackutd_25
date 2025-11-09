@@ -688,45 +688,79 @@ def update_mockup_html(mockup_id):
 
 @app.route('/api/mockups/<mockup_id>/submit', methods=['POST'])
 def submit_mockup_to_jira(mockup_id):
-    """Submit mockup to Jira as a new ticket"""
+    """Submit mockup to Jira - analyzes mockup vs repo and creates multiple tickets"""
     try:
-        # Lazy import to avoid issues if Jira credentials are not set
-        from jira_integration import create_jira_ticket
-        
         # Get mockup data from database
         mockup = get_mockup_from_db(mockup_id)
         if not mockup:
             return jsonify({'error': 'Mockup not found'}), 404
         
-        # Prepare mockup data for Jira
-        mockup_data = {
-            'id': mockup['id'],
-            'project_name': mockup['project_name'],
-            'prompt': mockup['prompt'],
-            'created_at': mockup['created_at'],
-            'html_filename': mockup['html_filename'],
-            'screenshot_filename': mockup['screenshot_filename']
-        }
+        # Get HTML content
+        html_path = MOCKUPS_DIR / mockup['html_filename']
+        if not html_path.exists():
+            return jsonify({'error': 'Mockup HTML file not found'}), 404
         
-        # Create Jira ticket (using hardcoded project key and issue type for now)
-        result = create_jira_ticket(
-            mockup_data,
-            project_key="KAN",   # Project key for KAN project
-            issue_type="Task"    # Hardcoded - can be made configurable
-        )
+        with open(html_path, 'r', encoding='utf-8') as f:
+            mockup_html = f.read()
         
-        if result.get('success'):
-            return jsonify({
-                'success': True,
-                'message': 'Mockup submitted to Jira successfully',
-                'issue_key': result.get('issue_key'),
-                'issue_url': result.get('issue_url')
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'Failed to create Jira ticket')
-            }), 500
+        # Get GitHub repo URL from mockup data or request
+        # Handle case where request might not have JSON body
+        try:
+            request_data = request.get_json(silent=True) or {}
+        except Exception:
+            request_data = {}
+        
+        github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
+        
+        if not github_repo_url:
+            # Fallback: Use the hardcoded repo URL if available
+            github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
+        
+        # Re-analyze repository to get current state
+        from repo_mockup_generator import parse_github_url
+        from github_integration import analyze_repo_for_mockup
+        from mockup_analyzer import analyze_mockup_vs_repo, create_tickets_from_analysis
+        
+        owner, repo_name = parse_github_url(github_repo_url)
+        if not owner or not repo_name:
+            return jsonify({'error': 'Invalid GitHub repository URL'}), 400
+        
+        print(f"Analyzing repository {owner}/{repo_name} for comparison with mockup")
+        
+        # Get repository data
+        repo_data = analyze_repo_for_mockup(owner, repo_name, mockup['prompt'], None)
+        
+        # Analyze differences and create tickets
+        print("Analyzing mockup vs repository to create tickets...")
+        tickets = analyze_mockup_vs_repo(mockup_html, repo_data, github_repo_url)
+        
+        print(f"Generated {len(tickets)} tickets from analysis")
+        
+        # Create tickets in Jira
+        results = create_tickets_from_analysis(tickets, github_repo_url, mockup_id)
+        
+        # Count successes and failures
+        successful = [r for r in results if r.get('success')]
+        failed = [r for r in results if not r.get('success')]
+        
+        return jsonify({
+            'success': True,
+            'message': f'Created {len(successful)} ticket(s) in Jira',
+            'tickets_created': len(successful),
+            'tickets_failed': len(failed),
+            'tickets': [
+                {
+                    'title': r.get('title', 'Unknown'),
+                    'issue_key': r.get('issue_key'),
+                    'issue_url': r.get('issue_url'),
+                    'difficulty': r.get('difficulty'),
+                    'priority': r.get('priority'),
+                    'success': r.get('success', False),
+                    'error': r.get('error') if not r.get('success') else None
+                }
+                for r in results
+            ]
+        })
             
     except ValueError as e:
         error_msg = f'Configuration error: {str(e)}'

@@ -4,6 +4,7 @@ from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
 import urllib3
 from pathlib import Path
+from typing import List
 
 # 🔇 Disable only the InsecureRequestWarning that verify=False triggers
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -98,6 +99,205 @@ def get_board_issues(board_id: int = 1, max_results: int = 100):
         start_at = data["startAt"] + data["maxResults"]
     
     return issues
+
+
+def create_enhanced_jira_ticket(
+    title: str,
+    description: str,
+    acceptance_criteria: List[str],
+    difficulty: int,
+    priority: int,
+    github_repo_url: str = "",
+    mockup_id: str = "",
+    project_key: str = "KAN",
+    issue_type: str = "Task"
+) -> dict:
+    """
+    Create an enhanced Jira ticket with difficulty, priority, description, and acceptance criteria.
+    
+    Args:
+        title: Ticket title/summary
+        description: Detailed description
+        acceptance_criteria: List of acceptance criteria strings
+        difficulty: Difficulty level (1-10)
+        priority: Priority level (1=High, 2=Medium, 3=Low)
+        github_repo_url: GitHub repository URL (optional)
+        mockup_id: Mockup ID for reference (optional)
+        project_key: Jira project key (default: "KAN")
+        issue_type: Issue type (default: "Task")
+    
+    Returns:
+        Dictionary with success status and ticket information
+    """
+    if not JIRA_EMAIL or not JIRA_API_TOKEN:
+        raise ValueError("JIRA_EMAIL and JIRA_API_TOKEN must be set in environment variables")
+    
+    # Map priority numbers to Jira priority names
+    priority_map = {
+        1: "Highest",
+        2: "High", 
+        3: "Medium"
+    }
+    priority_name = priority_map.get(priority, "Medium")
+    
+    # Build description content
+    description_content = []
+    
+    # Add main description
+    description_content.append({
+        "type": "heading",
+        "attrs": {"level": 2},
+        "content": [{"type": "text", "text": "Description"}]
+    })
+    description_content.append({
+        "type": "paragraph",
+        "content": [{"type": "text", "text": description}]
+    })
+    
+    # Add acceptance criteria
+    if acceptance_criteria:
+        description_content.append({
+            "type": "heading",
+            "attrs": {"level": 2},
+            "content": [{"type": "text", "text": "Acceptance Criteria"}]
+        })
+        criteria_list = []
+        for criterion in acceptance_criteria:
+            criteria_list.append({
+                "type": "listItem",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": criterion}]
+                }]
+            })
+        description_content.append({
+            "type": "bulletList",
+            "content": criteria_list
+        })
+    
+    # Add metadata
+    description_content.append({
+        "type": "heading",
+        "attrs": {"level": 2},
+        "content": [{"type": "text", "text": "Metadata"}]
+    })
+    
+    metadata_items = []
+    if github_repo_url:
+        metadata_items.append({
+            "type": "listItem",
+            "content": [{
+                "type": "paragraph",
+                "content": [
+                    {"type": "text", "text": "GitHub Repository: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": github_repo_url}
+                ]
+            }]
+        })
+    if mockup_id:
+        metadata_items.append({
+            "type": "listItem",
+            "content": [{
+                "type": "paragraph",
+                "content": [
+                    {"type": "text", "text": "Mockup ID: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": mockup_id}
+                ]
+            }]
+        })
+    metadata_items.append({
+        "type": "listItem",
+        "content": [{
+            "type": "paragraph",
+            "content": [
+                {"type": "text", "text": "Difficulty: ", "marks": [{"type": "strong"}]},
+                {"type": "text", "text": f"{difficulty}/10"}
+            ]
+        }]
+    })
+    
+    if metadata_items:
+        description_content.append({
+            "type": "bulletList",
+            "content": metadata_items
+        })
+    
+    # Build payload
+    payload = {
+        "fields": {
+            "project": {
+                "key": project_key
+            },
+            "summary": title,
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": description_content
+            },
+            "issuetype": {
+                "name": issue_type
+            },
+            "priority": {
+                "name": priority_name
+            }
+        }
+    }
+    
+    # Add custom field for difficulty if available (some Jira instances have this)
+    # For now, we'll include it in the description
+    
+    try:
+        response = requests.post(
+            f"{JIRA_BASE_URL}/rest/api/3/issue",
+            headers=headers,
+            auth=auth,
+            json=payload,
+            verify=False
+        )
+        
+        response.raise_for_status()
+        created_issue = response.json()
+        
+        return {
+            "success": True,
+            "issue_key": created_issue.get("key"),
+            "issue_id": created_issue.get("id"),
+            "issue_url": f"{JIRA_BASE_URL}/browse/{created_issue.get('key')}",
+            "title": title,
+            "difficulty": difficulty,
+            "priority": priority
+        }
+    except requests.exceptions.RequestException as e:
+        error_message = str(e)
+        error_details = None
+        
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_detail = e.response.json()
+                if "errorMessages" in error_detail:
+                    error_messages = error_detail.get("errorMessages", [])
+                    error_message = "; ".join(error_messages) if error_messages else str(e)
+                elif "errors" in error_detail:
+                    errors = error_detail.get("errors", {})
+                    error_message = "; ".join([f"{k}: {v}" for k, v in errors.items()])
+                elif "message" in error_detail:
+                    error_message = error_detail.get("message", str(e))
+                else:
+                    error_message = str(error_detail)
+                
+                error_details = error_detail
+            except Exception as json_error:
+                error_message = e.response.text or str(e)
+        
+        print(f"Jira API Error: {error_message}")
+        if error_details:
+            print(f"Error details: {error_details}")
+        
+        return {
+            "success": False,
+            "error": error_message,
+            "error_details": error_details
+        }
 
 
 def create_jira_ticket(mockup_data, project_key="KAN", issue_type="Task"):
