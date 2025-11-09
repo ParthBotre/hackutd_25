@@ -270,6 +270,7 @@ function MockupViewer({ mockup, onBack }) {
                   title="Mockup Preview"
                   className="mockup-iframe"
                   sandbox="allow-same-origin"
+                  scrolling="yes"
                 />
               </div>
             ) : activeTab === 'code' ? (

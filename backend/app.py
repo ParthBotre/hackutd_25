@@ -7,6 +7,8 @@ import html2image
 from pathlib import Path
 from dotenv import load_dotenv
 import sqlite3
+import uuid
+import json
 
 # Load environment variables from .env file
 # Try to load from backend directory explicitly
@@ -37,6 +39,10 @@ DB_PATH = DATA_DIR / 'mockups.db'
 
 # Initialize html2image
 hti = html2image.Html2Image(output_path=str(MOCKUPS_DIR))
+
+# In-memory storage for chat conversations
+# In production, this should be stored in a database
+chat_conversations = {}
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)

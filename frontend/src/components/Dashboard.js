@@ -1,20 +1,38 @@
 import axios from 'axios';
-import { Loader, Sparkles, Wand2, Clock, FolderOpen } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { Clock, FolderOpen, Loader, Sparkles, Wand2, Send, Bot, User } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import nvidiaLogo from '../assets/nvidia_logo.png';
+import pncLogo from '../assets/pnc_logo.png';
 import { API_ENDPOINTS } from '../config/api';
 import './Dashboard.css';
 
 function Dashboard({ onMockupGenerated }) {
-  const [projectName, setProjectName] = useState('');
-  const [prompt, setPrompt] = useState('');
+  const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [conversationId, setConversationId] = useState(null);
   const [pastProjects, setPastProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
   useEffect(() => {
     loadPastProjects();
+    // Initialize with welcome message
+    setMessages([{
+      role: 'assistant',
+      content: "Hi! I'm your AI assistant. I'll help you create a mockup for your product. Let's start by understanding what you're building. What kind of product or application would you like to create a mockup for?"
+    }]);
   }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const loadPastProjects = async () => {
     try {
@@ -40,142 +58,181 @@ function Dashboard({ onMockupGenerated }) {
     }
   };
 
-  const handleGenerate = async (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     
-    if (!prompt.trim()) {
-      setError('Please enter a description for your mockup');
+    if (!message.trim() || loading) {
       return;
     }
 
-    setLoading(true);
+    const userMessage = message.trim();
+    setMessage('');
     setError('');
+    setLoading(true);
+
+    // Add user message to UI immediately
+    const newUserMessage = { role: 'user', content: userMessage };
+    setMessages(prev => [...prev, newUserMessage]);
 
     try {
-      const response = await axios.post(API_ENDPOINTS.GENERATE_MOCKUP, {
-        prompt: prompt.trim(),
-        project_name: projectName.trim() || 'Untitled Project'
+      const response = await axios.post(API_ENDPOINTS.CHAT, {
+        conversation_id: conversationId,
+        message: userMessage
       });
 
       if (response.data.success) {
-        // Merge html_content into mockup object
-        const mockupWithHtml = {
-          ...response.data.mockup,
-          html_content: response.data.html_content
+        // Update conversation ID if this is a new conversation
+        if (response.data.conversation_id && !conversationId) {
+          setConversationId(response.data.conversation_id);
+        }
+
+        // Add AI response to messages (clean up READY_TO_GENERATE tags for display)
+        let displayMessage = response.data.message;
+        if (displayMessage.includes('<READY_TO_GENERATE>') && displayMessage.includes('</READY_TO_GENERATE>')) {
+          // Remove the tags but keep the content
+          displayMessage = displayMessage
+            .replace(/<READY_TO_GENERATE>/g, '')
+            .replace(/<\/READY_TO_GENERATE>/g, '')
+            .trim();
+        }
+        const aiMessage = { 
+          role: 'assistant', 
+          content: displayMessage 
         };
-        onMockupGenerated(mockupWithHtml);
-        // Reload past projects to include the new one
-        loadPastProjects();
+        setMessages(prev => [...prev, aiMessage]);
+
+        // If mockup is ready, show it
+        if (response.data.ready_to_generate && response.data.mockup) {
+          const mockupWithHtml = {
+            ...response.data.mockup,
+            html_content: response.data.html_content
+          };
+          
+          // Add a system message about mockup being ready
+          setTimeout(() => {
+            setMessages(prev => [...prev, {
+              role: 'system',
+              content: '🎉 Your mockup has been generated! Opening it now...'
+            }]);
+            onMockupGenerated(mockupWithHtml);
+            loadPastProjects();
+          }, 1000);
+        }
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to generate mockup. Please try again.');
-      console.error('Error generating mockup:', err);
+      setError(err.response?.data?.error || 'Failed to send message. Please try again.');
+      console.error('Error sending message:', err);
+      // Remove the user message on error
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
     }
   };
 
-  const examplePrompts = [
-    "Create a modern landing page for a fintech SaaS product with a hero section, features grid, and pricing table",
-    "Design a dashboard for a project management tool with sidebar navigation, task cards, and progress charts",
-    "Build a product page for an e-commerce site with image gallery, product details, and add to cart button",
-    "Create a mobile-first signup form with social login options and form validation styling"
-  ];
-
-  const handleExampleClick = (example) => {
-    setPrompt(example);
+  const handleNewChat = () => {
+    setMessages([{
+      role: 'assistant',
+      content: "Hi! I'm your AI assistant. I'll help you create a mockup for your product. Let's start by understanding what you're building. What kind of product or application would you like to create a mockup for?"
+    }]);
+    setConversationId(null);
+    setError('');
   };
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <div className="header-content">
-          <div className="logo-section">
-            <Sparkles className="logo-icon" />
-            <h1>PM Mockup Generator</h1>
+          <div className="header-top">
+            <div className="logo-section">
+              <Sparkles className="logo-icon" />
+              <h1>PM Genie</h1>
+            </div>
+            <div className="sponsor-logos">
+              <img src={pncLogo} alt="PNC Bank" className="sponsor-logo pnc-logo" />
+              <img src={nvidiaLogo} alt="NVIDIA" className="sponsor-logo nvidia-logo-img" />
+            </div>
           </div>
           <p className="subtitle">
             AI-Powered Mockup Generation for Product Managers
-            <span className="badge">Powered by NVIDIA Nemotron</span>
+            <span className="badge nvidia-badge">
+              <svg className="nvidia-logo-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
+              </svg>
+              Powered by NVIDIA Nemotron
+            </span>
           </p>
         </div>
       </div>
 
-      <div className="dashboard-content">
-        <div className="main-card">
-          <div className="card-header">
-            <Wand2 className="card-icon" />
-            <h2>Generate Mockup</h2>
+      <div className="dashboard-content chat-layout">
+        <div className="chat-container">
+          <div className="chat-header">
+            <div className="chat-header-content">
+              <Bot className="chat-header-icon" />
+              <h2>Chat with AI Assistant</h2>
+            </div>
+            <button className="new-chat-button" onClick={handleNewChat}>
+              <Sparkles size={16} />
+              New Chat
+            </button>
           </div>
 
-          <form onSubmit={handleGenerate} className="generate-form">
-            <div className="form-group">
-              <label htmlFor="projectName">Project Name (Optional)</label>
-              <input
-                type="text"
-                id="projectName"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="e.g., Customer Portal Redesign"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="prompt">
-                Describe Your Mockup *
-                <span className="label-hint">Be specific about features, layout, and style</span>
-              </label>
-              <textarea
-                id="prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the mockup you want to create..."
-                rows="6"
-                disabled={loading}
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="error-message">
-                {error}
+          <div className="chat-messages" ref={chatContainerRef}>
+            {messages.map((msg, index) => (
+              <div key={index} className={`chat-message ${msg.role}`}>
+                <div className="message-avatar">
+                  {msg.role === 'user' ? (
+                    <User size={20} />
+                  ) : msg.role === 'system' ? (
+                    <Sparkles size={20} />
+                  ) : (
+                    <Bot size={20} />
+                  )}
+                </div>
+                <div className="message-content">
+                  <div className="message-text">{msg.content}</div>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="chat-message assistant">
+                <div className="message-avatar">
+                  <Bot size={20} />
+                </div>
+                <div className="message-content">
+                  <div className="message-text">
+                    <Loader className="spinning" size={16} />
+                    <span>Thinking...</span>
+                  </div>
+                </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
+          </div>
 
+          {error && (
+            <div className="chat-error">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSendMessage} className="chat-input-form">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type your message..."
+              disabled={loading}
+              className="chat-input"
+            />
             <button
               type="submit"
-              className="generate-button"
-              disabled={loading}
+              disabled={loading || !message.trim()}
+              className="chat-send-button"
             >
-              {loading ? (
-                <>
-                  <Loader className="button-icon spinning" />
-                  Generating Mockup...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="button-icon" />
-                  Generate Mockup
-                </>
-              )}
+              <Send size={20} />
             </button>
           </form>
-
-          <div className="examples-section">
-            <h3>Example Prompts</h3>
-            <div className="examples-grid">
-              {examplePrompts.map((example, index) => (
-                <div
-                  key={index}
-                  className="example-card"
-                  onClick={() => handleExampleClick(example)}
-                >
-                  <p>{example}</p>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="info-section">
@@ -191,7 +248,7 @@ function Dashboard({ onMockupGenerated }) {
               </div>
             ) : pastProjects.length === 0 ? (
               <div className="empty-projects">
-                <p>No projects yet. Generate your first mockup to get started!</p>
+                <p>No projects yet. Start chatting to create your first mockup!</p>
               </div>
             ) : (
               <div className="projects-list">
@@ -224,33 +281,42 @@ function Dashboard({ onMockupGenerated }) {
               </div>
             )}
           </div>
+
           <div className="info-card">
-            <h3>🎯 How It Works</h3>
+            <h3>💬 How It Works</h3>
             <ol>
-              <li>Describe your desired mockup in natural language</li>
-              <li>AI generates a complete HTML mockup instantly</li>
-              <li>Review and collect stakeholder feedback</li>
-              <li>Iterate and refine based on feedback</li>
-              <li>Export final design to share with developers</li>
+              <li>Chat with the AI assistant about your product idea</li>
+              <li>Answer clarifying questions about features and design</li>
+              <li>AI generates your mockup when it has full clarity</li>
+              <li>Review and refine your mockup as needed</li>
             </ol>
           </div>
 
           <div className="info-card">
             <h3>✨ Key Features</h3>
             <ul>
-              <li>Powered by NVIDIA Nemotron AI</li>
-              <li>Instant HTML mockup generation</li>
+              <li className="nvidia-feature">
+                <svg className="nvidia-logo-inline" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
+                </svg>
+                Conversational AI interface
+              </li>
+              <li>Intelligent clarifying questions</li>
+              <li>Automatic mockup generation</li>
               <li>Visual preview with screenshots</li>
-              <li>Feedback collection system</li>
               <li>Iterative refinement workflow</li>
-              <li>Export-ready for development</li>
             </ul>
           </div>
 
           <div className="info-card challenge-card">
             <h3>🏆 Challenge Integration</h3>
             <p><strong>PNC Challenge:</strong> Supporting PMs in Prototyping & Testing phase</p>
-            <p><strong>NVIDIA Challenge:</strong> Multi-step workflow with AI agent integration</p>
+            <p className="nvidia-challenge">
+              <svg className="nvidia-logo-inline" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4.5 3h15c.825 0 1.5.675 1.5 1.5v15c0 .825-.675 1.5-1.5 1.5h-15c-.825 0-1.5-.675-1.5-1.5v-15c0-.825.675-1.5 1.5-1.5zm6.75 3.75v10.5l6-5.25-6-5.25z"/>
+              </svg>
+              <strong>NVIDIA Challenge:</strong> Multi-step workflow with AI agent integration
+            </p>
           </div>
         </div>
       </div>
@@ -259,4 +325,3 @@ function Dashboard({ onMockupGenerated }) {
 }
 
 export default Dashboard;
-

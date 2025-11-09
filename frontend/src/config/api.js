@@ -6,6 +6,8 @@ export const API_ENDPOINTS = {
   HEALTH: `${API_BASE_URL}/api/health`,
   DEBUG_API_KEY: `${API_BASE_URL}/api/debug/api-key`,
   GENERATE_MOCKUP: `${API_BASE_URL}/api/generate-mockup`,
+  CHAT: `${API_BASE_URL}/api/chat`,
+  GET_CONVERSATION: (id) => `${API_BASE_URL}/api/chat/${id}`,
   LIST_MOCKUPS: `${API_BASE_URL}/api/mockups`,
   GET_MOCKUP: (id) => `${API_BASE_URL}/api/mockups/${id}`,
   GET_MOCKUP_HTML: (id) => `${API_BASE_URL}/api/mockups/${id}/html`,
