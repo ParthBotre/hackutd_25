@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  ArrowLeft, 
-  Code, 
-  Eye, 
-  MessageSquare, 
-  Send, 
-  RefreshCw,
+import {
+  ArrowLeft,
+  Code,
   Download,
+  Eye,
+  MessageSquare,
+  RefreshCw,
+  Send,
   User
 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import './MockupViewer.css';
 
 function MockupViewer({ mockup, onBack }) {

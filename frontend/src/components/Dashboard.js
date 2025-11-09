@@ -2,6 +2,8 @@ import axios from 'axios';
 import { Loader, Sparkles, Wand2 } from 'lucide-react';
 import React, { useState } from 'react';
 import './Dashboard.css';
+import LogoutButton from './LogoutButton';
+import Profile from './Profile';
 
 function Dashboard({ onMockupGenerated }) {
   const [projectName, setProjectName] = useState('');
@@ -57,9 +59,15 @@ function Dashboard({ onMockupGenerated }) {
     <div className="dashboard">
       <div className="dashboard-header">
         <div className="header-content">
-          <div className="logo-section">
-            <Sparkles className="logo-icon" />
-            <h1>PM Mockup Generator</h1>
+          <div className="header-top">
+            <div className="logo-section">
+              <Sparkles className="logo-icon" />
+              <h1>PM Mockup Generator</h1>
+            </div>
+            <div className="auth-section">
+              <Profile />
+              <LogoutButton />
+            </div>
           </div>
           <p className="subtitle">
             AI-Powered Mockup Generation for Product Managers
