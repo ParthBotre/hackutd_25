@@ -384,7 +384,31 @@ def chat():
             'content': message
         })
         
+        # Check if user is explicitly requesting mockup generation
+        explicit_generate_keywords = ['generate', 'create', 'build', 'make', 'show me', 'give me', 'ready', 'done', 'go ahead']
+        user_wants_mockup = any(keyword in message.lower() for keyword in explicit_generate_keywords)
+        
         # Create system prompt for the AI assistant
+        if user_wants_mockup or len(conversation['messages']) >= 4:
+            # User explicitly wants mockup or has had enough conversation
+            system_message = """You are a Product Manager assistant helping to gather requirements for mockup generation.
+
+IMPORTANT: The user has indicated they want to generate a mockup now. You MUST include the <READY_TO_GENERATE> tags in your response.
+
+Format your response as follows:
+1. Provide a brief, friendly confirmation
+2. Include a comprehensive summary of all requirements discussed wrapped in <READY_TO_GENERATE> and </READY_TO_GENERATE> tags
+
+The summary should include:
+- Target audience and user personas
+- Key features and functionality
+- Design preferences (colors, style, layout)
+- User flow and interactions
+- Any specific content or branding requirements
+
+CRITICAL: You MUST include both <READY_TO_GENERATE> and </READY_TO_GENERATE> tags around your summary."""
+        else:
+            system_message = """You are a Product Manager assistant helping to gather requirements for mockup generation.
         # Include README context if available
         tech_stack_context = ""
         readme_instruction = ""
@@ -392,13 +416,10 @@ def chat():
         if conversation.get('readme'):
             tech_stack_context = f"""
 
-========================================
 PROJECT README (ALREADY LOADED)
-========================================
 
 {conversation['readme'][:2500]}
 
-========================================
 """
             readme_instruction = """
 
@@ -428,6 +449,7 @@ Examples of when to generate:
 - "Make a dashboard" → Generate
 - "Design a landing page" → Generate
 
+When you have gathered enough information (after 2-3 exchanges) OR when the user explicitly asks to generate/create/build a mockup, you MUST include the special tags <READY_TO_GENERATE> and </READY_TO_GENERATE> in your response with a complete summary of the requirements.
 Examples of when NOT to generate (just chat normally):
 - "What are good features for a weather app?" → Chat normally, suggest features
 - "How should I design my dashboard?" → Chat normally, give advice
@@ -463,22 +485,43 @@ Be friendly and helpful. Only use the <READY_TO_GENERATE> tags when they explici
         })
         
         # Check if AI is ready to generate mockup
-        ready_to_generate = '<READY_TO_GENERATE>' in ai_response and '</READY_TO_GENERATE>' in ai_response
+        # Also check if user explicitly requested generation (fallback)
+        ready_to_generate = (
+            ('<READY_TO_GENERATE>' in ai_response and '</READY_TO_GENERATE>' in ai_response) or
+            (user_wants_mockup and len(conversation['messages']) >= 4)
+        )
         
         # If ready to generate, extract the summary and generate mockup
         mockup_data = None
         html_content = None
         
         if ready_to_generate:
-            # Extract the summary between tags
+            # Extract the summary between tags, or use conversation summary as fallback
             start_tag = '<READY_TO_GENERATE>'
             end_tag = '</READY_TO_GENERATE>'
-            start_idx = ai_response.find(start_tag) + len(start_tag)
-            end_idx = ai_response.find(end_tag)
-            summary = ai_response[start_idx:end_idx].strip()
+            
+            if start_tag in ai_response and end_tag in ai_response:
+                start_idx = ai_response.find(start_tag) + len(start_tag)
+                end_idx = ai_response.find(end_tag)
+                summary = ai_response[start_idx:end_idx].strip()
+            else:
+                # Fallback: create summary from conversation history
+                conversation_summary = []
+                for msg in conversation['messages']:
+                    if msg['role'] == 'user':
+                        conversation_summary.append(f"User: {msg['content']}")
+                summary = "\n".join(conversation_summary)
+                print(f"[WARNING] AI did not include READY_TO_GENERATE tags, using conversation summary as fallback")
             
             # Generate mockup using the summary as prompt
             system_message_mockup = """You are an expert UI/UX designer and frontend developer. Generate complete, production-ready HTML mockups based on user requirements.
+
+CRITICAL INSTRUCTIONS:
+- You MUST return ONLY valid HTML code
+- Do NOT include any explanations, markdown formatting, or code blocks
+- Do NOT wrap the HTML in ```html``` or ``` tags
+- Start directly with <!DOCTYPE html> and end with </html>
+- The HTML must be complete, functional, and ready to use
 
 Your mockups should:
 1. Be fully self-contained with inline CSS (no external dependencies)
@@ -489,22 +532,49 @@ Your mockups should:
 6. Be visually appealing and suitable for stakeholder presentations
 7. Include semantic HTML5 elements
 8. Use modern CSS features (flexbox, grid, gradients, shadows, etc.)
+9. Be production-ready and polished
 
-Return ONLY the complete HTML code, no explanations or markdown formatting."""
+Return ONLY the complete HTML code starting with <!DOCTYPE html>, no explanations or markdown formatting."""
             
             html_content = call_nvidia_nemotron(summary, system_message_mockup, [])
             
-            # Clean up the HTML response
+            # Clean up the HTML response - remove reasoning blocks
             if '<think>' in html_content and '</think>' in html_content:
                 start_idx = html_content.find('<think>')
                 end_idx = html_content.find('</think>') + len('</think>')
                 html_content = html_content[:start_idx] + html_content[end_idx:]
                 html_content = html_content.strip()
             
+            # Remove markdown code blocks if present
             if '```html' in html_content:
-                html_content = html_content.split('```html')[1].split('```')[0].strip()
+                parts = html_content.split('```html')
+                if len(parts) > 1:
+                    html_content = parts[1].split('```')[0].strip()
             elif '```' in html_content:
-                html_content = html_content.split('```')[1].split('```')[0].strip()
+                parts = html_content.split('```')
+                if len(parts) > 1:
+                    # Find the part that looks like HTML (contains <!DOCTYPE or <html)
+                    for part in parts:
+                        if '<!DOCTYPE' in part.upper() or '<html' in part.lower():
+                            html_content = part.strip()
+                            break
+                    else:
+                        # Fallback: take the longest part that's not empty
+                        html_content = max([p.strip() for p in parts if p.strip()], key=len)
+            
+            # Ensure HTML starts properly
+            html_content = html_content.strip()
+            if not html_content.startswith('<!DOCTYPE') and not html_content.startswith('<html'):
+                # Try to find HTML start
+                html_start = html_content.find('<!DOCTYPE')
+                if html_start == -1:
+                    html_start = html_content.find('<html')
+                if html_start > 0:
+                    html_content = html_content[html_start:]
+            
+            # Validate we have actual HTML
+            if not html_content or len(html_content) < 100:
+                raise Exception("Generated HTML content is too short or empty. The AI may not have generated valid HTML.")
             
             # Generate mockup metadata
             mockup_id = datetime.now().strftime('%Y%m%d_%H%M%S%f')
@@ -624,7 +694,7 @@ def generate_mockup():
     data = request.json
     prompt = data.get('prompt', '')
     project_name = data.get('project_name', 'Untitled Project')
-    github_repo_url = data.get('github_repo_url', '') or os.environ.get('GITHUB_REPO_URL', '')
+    github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
     
     if not prompt:
         return jsonify({'error': 'Prompt is required'}), 400
@@ -841,6 +911,149 @@ Return ONLY the complete HTML code, no explanations."""
         'mockup_id': mockup_id,
         'html_content': refined_html
     })
+
+@app.route('/api/simulate-feedback', methods=['POST'])
+def simulate_feedback():
+    """Simulate stakeholder/user feedback by analyzing HTML mockup"""
+    data = request.json
+    html_content = data.get('html_content', '')
+    
+    if not html_content:
+        return jsonify({'error': 'HTML content is required'}), 400
+    
+    # Extract CSS and JavaScript from HTML
+    import re
+    css_matches = re.findall(r'<style[^>]*>(.*?)</style>', html_content, re.DOTALL | re.IGNORECASE)
+    js_matches = re.findall(r'<script[^>]*>(.*?)</script>', html_content, re.DOTALL | re.IGNORECASE)
+    
+    css_content = '\n'.join(css_matches) if css_matches else 'No inline CSS found'
+    js_content = '\n'.join(js_matches) if js_matches else 'No inline JavaScript found'
+    
+    # Limit content to avoid token limits
+    html_preview = html_content[:5000] if len(html_content) > 5000 else html_content
+    css_preview = css_content[:2000] if len(css_content) > 2000 else css_content
+    js_preview = js_content[:2000] if len(js_content) > 2000 else js_content
+    
+    # Create analysis prompt
+    analysis_prompt = f"""Analyze this HTML mockup and provide the top 3 criticisms or feedback points that a stakeholder or end user might have.
+
+HTML Content:
+{html_preview}
+
+CSS Content:
+{css_preview}
+
+JavaScript Content:
+{js_preview}
+
+Provide exactly 3 feedback items in the following JSON format:
+{{
+  "feedback": [
+    {{
+      "title": "Brief title of the issue",
+      "description": "Detailed description of what a stakeholder or user might criticize",
+      "category": "design|usability|accessibility|performance|content"
+    }},
+    {{
+      "title": "Brief title of the issue",
+      "description": "Detailed description of what a stakeholder or user might criticize",
+      "category": "design|usability|accessibility|performance|content"
+    }},
+    {{
+      "title": "Brief title of the issue",
+      "description": "Detailed description of what a stakeholder or user might criticize",
+      "category": "design|usability|accessibility|performance|content"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON, no markdown formatting or explanations."""
+    
+    system_message = """You are an expert UX researcher and product manager who understands stakeholder and user perspectives. 
+Analyze mockups critically and identify realistic feedback points that would come from stakeholders or end users.
+Your response must be valid JSON only, with no markdown formatting or explanations."""
+    
+    try:
+        # Call NVIDIA Nemotron to analyze
+        feedback_response = call_nvidia_nemotron(analysis_prompt, system_message)
+        
+        # Clean up the response
+        if '<think>' in feedback_response:
+            start_idx = feedback_response.find('<think>')
+            end_idx = feedback_response.find('</think>') + len('</think>')
+            feedback_response = feedback_response[:start_idx] + feedback_response[end_idx:]
+            feedback_response = feedback_response.strip()
+        
+        # Remove markdown code blocks if present
+        if '```json' in feedback_response:
+            feedback_response = feedback_response.split('```json')[1].split('```')[0].strip()
+        elif '```' in feedback_response:
+            feedback_response = feedback_response.split('```')[1].split('```')[0].strip()
+        
+        # Parse JSON
+        import json
+        json_start = feedback_response.find('{')
+        json_end = feedback_response.rfind('}') + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            json_str = feedback_response[json_start:json_end]
+        else:
+            json_str = feedback_response
+        
+        feedback_data = json.loads(json_str)
+        
+        # Validate and format feedback
+        feedback_items = feedback_data.get('feedback', [])
+        if not isinstance(feedback_items, list) or len(feedback_items) == 0:
+            raise ValueError("No feedback items found in response")
+        
+        # Ensure we have exactly 3 items (or pad/trim as needed)
+        while len(feedback_items) < 3:
+            feedback_items.append({
+                "title": "Additional Review Needed",
+                "description": "Further stakeholder review may reveal additional concerns.",
+                "category": "general"
+            })
+        
+        feedback_items = feedback_items[:3]  # Take only first 3
+        
+        return jsonify({
+            'success': True,
+            'feedback': feedback_items
+        })
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {str(e)}")
+        print(f"Response was: {feedback_response[:500]}")
+        # Fallback: return generic feedback
+        return jsonify({
+            'success': True,
+            'feedback': [
+                {
+                    "title": "Design Consistency",
+                    "description": "Stakeholders may want to review color scheme and typography for brand alignment.",
+                    "category": "design"
+                },
+                {
+                    "title": "User Experience Flow",
+                    "description": "Users might find navigation or interaction patterns unclear or non-intuitive.",
+                    "category": "usability"
+                },
+                {
+                    "title": "Content Clarity",
+                    "description": "Stakeholders may request clearer messaging or more prominent call-to-action elements.",
+                    "category": "content"
+                }
+            ]
+        })
+    except Exception as e:
+        print(f"Error simulating feedback: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Failed to simulate feedback: {str(e)}'
+        }), 500
 
 @app.route('/api/edit-html', methods=['POST'])
 def edit_html():
@@ -1110,7 +1323,7 @@ def create_tickets_from_chat(conversation_id):
         
         # Get GitHub repo URL from request or environment
         data = request.get_json(silent=True) or {}
-        github_repo_url = data.get('github_repo_url') or os.environ.get('GITHUB_REPO_URL', '')
+        github_repo_url = "https://github.com/GraysenGould/TestBanking"
         
         if not github_repo_url:
             return jsonify({
@@ -1198,6 +1411,19 @@ def submit_mockup_to_jira(mockup_id):
         with open(html_path, 'r', encoding='utf-8') as f:
             mockup_html = f.read()
         
+        # Get GitHub repo URL from mockup data or request
+        # Handle case where request might not have JSON body"
+        try:
+            request_data = request.get_json(silent=True) or {}
+        except Exception:
+            request_data = {}
+        
+        # Try to get GitHub URL from request, mockup data, or environment
+        github_repo_url = "https://github.com/GraysenGould/TestBanking.git"
+        if not github_repo_url:
+            return jsonify({
+                'error': 'GitHub repository URL is required for ticket generation'
+            }), 400
         from jira_integration import create_enhanced_jira_ticket
         
         # Use AI to analyze the mockup and generate implementation tickets

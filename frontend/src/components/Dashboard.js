@@ -349,6 +349,7 @@ function Dashboard({ onMockupGenerated, onViewJiraBoard }) {
               </div>
             )}
           </div>
+
         </div>
       </div>
     </div>
