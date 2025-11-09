@@ -185,31 +185,22 @@
   padding: 30px;
   background: rgba(0, 0, 0, 0.2);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .mockup-iframe {
   width: 90%;
   height: 90%;
   max-width: 90%;
-  max-height: 90%;
+  min-height: 90%;
   border: none;
   background: white;
   border-radius: 10px;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-
-/* Hide scrollbars in the iframe */
-.mockup-iframe::-webkit-scrollbar {
-  display: none;
-}
-
-.mockup-iframe {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  overflow: auto;
+  display: block;
 }
 
 .code-container {
