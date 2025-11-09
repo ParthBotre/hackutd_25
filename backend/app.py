@@ -24,9 +24,9 @@ NVIDIA_API_URL = os.environ.get('NVIDIA_API_URL', 'https://integrate.api.nvidia.
 
 # Debug: Check if API key is loaded (don't print the actual key)
 if NVIDIA_API_KEY:
-    print(f"✅ NVIDIA_API_KEY loaded (length: {len(NVIDIA_API_KEY)} characters)")
+    print(f"[OK] NVIDIA_API_KEY loaded (length: {len(NVIDIA_API_KEY)} characters)")
 else:
-    print("⚠️  NVIDIA_API_KEY is empty or not set")
+    print("[WARNING] NVIDIA_API_KEY is empty or not set")
 
 # Storage directories and database
 MOCKUPS_DIR = Path('mockups')
@@ -722,6 +722,65 @@ def update_mockup_html(mockup_id):
         'success': True,
         'message': 'Mockup updated successfully'
     })
+
+@app.route('/api/mockups/<mockup_id>/submit', methods=['POST'])
+def submit_mockup_to_jira(mockup_id):
+    """Submit mockup to Jira as a new ticket"""
+    try:
+        # Lazy import to avoid issues if Jira credentials are not set
+        from jira_integration import create_jira_ticket
+        
+        # Get mockup data from database
+        mockup = get_mockup_from_db(mockup_id)
+        if not mockup:
+            return jsonify({'error': 'Mockup not found'}), 404
+        
+        # Prepare mockup data for Jira
+        mockup_data = {
+            'id': mockup['id'],
+            'project_name': mockup['project_name'],
+            'prompt': mockup['prompt'],
+            'created_at': mockup['created_at'],
+            'html_filename': mockup['html_filename'],
+            'screenshot_filename': mockup['screenshot_filename']
+        }
+        
+        # Create Jira ticket (using hardcoded project key and issue type for now)
+        result = create_jira_ticket(
+            mockup_data,
+            project_key="KAN",   # Project key for KAN project
+            issue_type="Task"    # Hardcoded - can be made configurable
+        )
+        
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': 'Mockup submitted to Jira successfully',
+                'issue_key': result.get('issue_key'),
+                'issue_url': result.get('issue_url')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Failed to create Jira ticket')
+            }), 500
+            
+    except ValueError as e:
+        error_msg = f'Configuration error: {str(e)}'
+        print(f"Jira Configuration Error: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+    except Exception as e:
+        import traceback
+        error_msg = f'Failed to submit mockup to Jira: {str(e)}'
+        print(f"Error submitting mockup to Jira: {error_msg}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001, host='127.0.0.1')

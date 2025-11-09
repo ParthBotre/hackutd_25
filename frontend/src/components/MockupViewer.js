@@ -10,7 +10,8 @@ import {
   User,
   Edit,
   Save,
-  Bot
+  Bot,
+  CheckCircle
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
 import './MockupViewer.css';
@@ -23,6 +24,7 @@ function MockupViewer({ mockup, onBack }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     setHtmlContent(mockup.html_content);
@@ -140,6 +142,37 @@ function MockupViewer({ mockup, onBack }) {
     }
   };
 
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const response = await axios.post(API_ENDPOINTS.SUBMIT_MOCKUP(mockup.id));
+      
+      if (response.data.success) {
+        alert(`Mockup submitted to Jira successfully!\n\nIssue Key: ${response.data.issue_key}\nIssue URL: ${response.data.issue_url}`);
+      } else {
+        throw new Error(response.data.error || 'Failed to submit mockup');
+      }
+    } catch (err) {
+      console.error('Error submitting mockup to Jira:', err);
+      console.error('Error response:', err.response?.data);
+      
+      // Get detailed error message
+      let errorMsg = 'Failed to submit mockup to Jira';
+      if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      // Show detailed error
+      alert(`Failed to submit mockup to Jira:\n\n${errorMsg}\n\nPlease check:\n1. Jira credentials are set in backend/.env\n2. Project key "KAN" exists in your Jira instance\n3. Issue type "Task" exists in that project\n4. You have permission to create issues`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -167,6 +200,14 @@ function MockupViewer({ mockup, onBack }) {
           <button className="action-button download-button" onClick={handleDownloadHTML}>
             <Download />
             Download HTML
+          </button>
+          <button 
+            className="action-button submit-button" 
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            <CheckCircle />
+            {submitting ? 'Submitting...' : 'Submit'}
           </button>
         </div>
       </div>
