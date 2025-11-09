@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
 import axios from 'axios';
-import { Sparkles, Loader, Wand2 } from 'lucide-react';
+import { Loader, Sparkles, Wand2 } from 'lucide-react';
+import React, { useState } from 'react';
 import './Dashboard.css';
 
 function Dashboard({ onMockupGenerated }) {
