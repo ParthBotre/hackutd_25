@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Loader, Sparkles, Wand2, Clock, FolderOpen } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
+import { API_ENDPOINTS } from '../config/api';
 import './Dashboard.css';
 
 function Dashboard({ onMockupGenerated }) {
@@ -18,7 +19,7 @@ function Dashboard({ onMockupGenerated }) {
   const loadPastProjects = async () => {
     try {
       setLoadingProjects(true);
-      const response = await axios.get('/api/mockups');
+      const response = await axios.get(API_ENDPOINTS.LIST_MOCKUPS);
       setPastProjects(response.data.mockups || []);
     } catch (err) {
       console.error('Error loading past projects:', err);
@@ -29,7 +30,7 @@ function Dashboard({ onMockupGenerated }) {
 
   const handleViewProject = async (mockupId) => {
     try {
-      const response = await axios.get(`/api/mockups/${mockupId}`);
+      const response = await axios.get(API_ENDPOINTS.GET_MOCKUP(mockupId));
       if (response.data.mockup) {
         onMockupGenerated(response.data.mockup);
       }
@@ -51,7 +52,7 @@ function Dashboard({ onMockupGenerated }) {
     setError('');
 
     try {
-      const response = await axios.post('/api/generate-mockup', {
+      const response = await axios.post(API_ENDPOINTS.GENERATE_MOCKUP, {
         prompt: prompt.trim(),
         project_name: projectName.trim() || 'Untitled Project'
       });

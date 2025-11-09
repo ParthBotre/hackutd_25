@@ -230,7 +230,17 @@ npm install
 
 **⏱️ This may take 2-5 minutes** depending on your internet speed.
 
-#### Step 3: Start the Development Server
+#### Step 3: Configure API URL (Optional)
+
+If your backend is running on a different port or URL, create a `.env` file in the `frontend` directory:
+
+```env
+REACT_APP_API_URL=http://localhost:5001
+```
+
+**Note**: If you don't create this file, it defaults to `http://localhost:5001`. Only create it if you need to change the backend URL.
+
+#### Step 4: Start the Development Server
 
 ```bash
 npm start
@@ -254,12 +264,15 @@ Note that the development build is not optimized.
 2. If not, manually open: `http://localhost:3000`
 3. You should see the PM Mockup Generator dashboard
 4. Check the browser console (F12) for any errors
+5. Try generating a mockup to verify backend connection
 
 **⚠️ Common Issues:**
 - If port 3000 is already in use: The terminal will ask if you want to use a different port (press Y)
 - If you see "Cannot connect to backend": 
   - Make sure backend is running on port 5001
-  - Check `frontend/package.json` has `"proxy": "http://localhost:5001"`
+  - Verify backend URL in `frontend/.env` (if you created one) matches your backend
+  - Check browser console (F12) for specific error messages
+  - Test backend directly: `http://127.0.0.1:5001/api/health`
 - If npm install fails: Try deleting `node_modules` folder and `package-lock.json`, then run `npm install` again
 
 **Keep this terminal window open** - the frontend server needs to keep running!
@@ -284,6 +297,8 @@ npm start
 ✅ Should open browser to: http://localhost:3000
 
 **Both servers must be running for the app to work!**
+
+**Note**: All API calls use full URLs with port numbers (`http://localhost:5001/api/...`) for better portability. You can customize the backend URL by creating a `frontend/.env` file with `REACT_APP_API_URL=your_backend_url`.
 
 ## ✅ Pre-Flight Checklist
 
@@ -330,10 +345,16 @@ Before starting, verify you have everything:
 
 **Solutions**:
 1. ✅ Verify backend is running: Visit `http://127.0.0.1:5001/api/health`
-2. ✅ Check `frontend/package.json` has: `"proxy": "http://localhost:5001"`
-3. ✅ Restart frontend server after changing proxy settings
+2. ✅ Check API URL configuration:
+   - If `frontend/.env` exists, verify `REACT_APP_API_URL=http://localhost:5001`
+   - Default is `http://localhost:5001` (no .env needed)
+   - Make sure port matches your backend port
+3. ✅ Restart frontend server after changing `.env` file (React needs restart for env changes)
 4. ✅ Check browser console (F12) for specific error messages
+   - Look for CORS errors or network errors
+   - Check Network tab to see if requests are going to correct URL
 5. ✅ Verify both servers are running simultaneously
+6. ✅ Test API directly: Open `http://localhost:5001/api/health` in browser
 
 ### Database Issues
 

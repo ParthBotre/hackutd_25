@@ -12,6 +12,7 @@ import {
   Save,
   Bot
 } from 'lucide-react';
+import { API_ENDPOINTS } from '../config/api';
 import './MockupViewer.css';
 
 function MockupViewer({ mockup, onBack }) {
@@ -31,7 +32,7 @@ function MockupViewer({ mockup, onBack }) {
     setRefining(true);
 
     try {
-      const response = await axios.post('/api/refine-mockup', {
+      const response = await axios.post(API_ENDPOINTS.REFINE_MOCKUP, {
         original_html: htmlContent,
         feedback: ['Refine and improve the design']
       });
@@ -74,7 +75,7 @@ function MockupViewer({ mockup, onBack }) {
     setEditInstruction('');
 
     try {
-      const response = await axios.post('/api/edit-html', {
+      const response = await axios.post(API_ENDPOINTS.EDIT_HTML, {
         html_content: htmlContent,
         instruction: userMessage
       });
@@ -85,7 +86,7 @@ function MockupViewer({ mockup, onBack }) {
         
         // Automatically save the edited HTML to the database
         try {
-          await axios.put(`/api/mockups/${mockup.id}/update`, {
+          await axios.put(API_ENDPOINTS.UPDATE_MOCKUP(mockup.id), {
             html_content: newHtml
           });
           // Update mockup object to reflect saved changes
@@ -119,7 +120,7 @@ function MockupViewer({ mockup, onBack }) {
   const handleSaveChanges = async () => {
     setSaving(true);
     try {
-      const response = await axios.put(`/api/mockups/${mockup.id}/update`, {
+      const response = await axios.put(API_ENDPOINTS.UPDATE_MOCKUP(mockup.id), {
         html_content: htmlContent
       });
       
